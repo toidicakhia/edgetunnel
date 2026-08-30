@@ -1,8 +1,22 @@
 name = "v20251104"
-main = "_worker.js"
+main = "src/worker.js"
 compatibility_date = "2025-11-04"
 keep_vars = true
 
-#[[kv_namespaces]]
-#binding = "KV"			#KV绑定名默认不可修改
-#id = ""				#KV数据库id
+# KV Namespace binding (uncomment and fill when using KV)
+# [[kv_namespaces]]
+# binding = "KV"			# KV binding name must remain "KV"
+# id = ""				# KV namespace ID
+
+# New modular structure:
+#   src/worker.js      -> entry point
+#   src/router.js      -> main fetch router
+#   src/handlers/*     -> protocol handlers (ws, xhttp, grpc)
+#   src/core/*         -> low-level transport (tcp, grain, proxy, tls, turn, sstp, protocol)
+#   src/utils/*        -> shared utilities (crypto, doh, network, config)
+#   src/html/*         -> camouflage pages
+#   src/constants.js   -> immutable globals
+#   src/state.js       -> mutable global state
+#
+# Legacy shim: _worker.js re-exports from src/worker.js for Pages compatibility
+# Original monolithic file preserved as _worker.legacy.js for reference

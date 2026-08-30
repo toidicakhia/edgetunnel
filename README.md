@@ -1,4 +1,7 @@
-# 🚀 edgetunnel 2.1
+# 🚀 edgetunnel 2.1 — Modular
+
+> **Refactored 2026-08-30**: Monolithic `_worker.js` (6,199 lines) split into `src/` ES modules. See [`src/README.md`](src/README.md) and [`ARCHITECTURE.md`](ARCHITECTURE.md). Original preserved as `_worker.legacy.js`; Pages shim remains `_worker.js` → `src/worker.js`. `wrangler.toml` `main` now `src/worker.js`.
+
 ![Admin Panel](./img.png)
 
 [![Stars](https://img.shields.io/github/stars/cmliu/edgetunnel?style=flat-square&logo=github)](https://github.com/cmliu/edgetunnel/stargazers)
@@ -165,6 +168,23 @@ This tool supports dynamic switching of proxy methods via **PATH**:
    ```url
    /trojan=1.1.1.1:1234
    ```
+
+---
+
+## 🛠 Development (Modular Refactor)
+
+> **New in 2026-08-30**: The 6,199-line `_worker.js` has been refactored into `src/` modules. See [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
+```bash
+npm install
+npm run dev          # wrangler dev --local  (uses src/worker.js)
+npm run check        # node --check on all src files
+npm run lint         # eslint
+npm run format       # prettier
+npm run deploy       # wrangler deploy --dry-run to verify
+```
+
+**Structure**: `src/worker.js` → `router.js` → `handlers/*` → `core/*` → `utils/*` → `constants.js`/`state.js`. Original preserved as `_worker.legacy.js`; `_worker.js` is a 10-line shim for Pages. See `src/README.md` for full layout and import rules.
 
 ---
 

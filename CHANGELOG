@@ -1,3 +1,14 @@
+## [2.1.20260830000000] - 2026-08-30 00:00:00
+
+### Refactor
+
+- **Full modular split**: 6,199-line `_worker.js` (326 KB) → `src/` ES modules (`worker.js` → `router.js` → `handlers/*` → `core/*` → `utils/*` → `constants.js`/`state.js` + `html/camouflage.js`). See `ARCHITECTURE.md` and `src/README.md`.
+- **Tooling**: Added `package.json` (type: module), `eslint.config.js`, `.prettierrc`, `.editorconfig`, `jsconfig.json`, `.vscode/settings.json`, npm scripts (`dev`, `deploy`, `check`, `lint`, `format`).
+- **Wrangler**: `main` updated to `src/worker.js`; `_worker.js` now 10-line Pages shim, original preserved as `_worker.legacy.js`.
+- **State isolation**: Mutable globals moved to `src/state.js` with setters (`setConfigJSON`, `setDebugLogging`, …) to preserve ESM live bindings.
+- **Bug fixes**: Fixed 8+ latent syntax bugs (`bytes` vs `byte`, `charsetLen`, `pendingVerifyOptimalURL`, `mergedOtherNodeArray`, `transportPathParamValue`, `responseContent`, 30+ spaced identifiers like `copy bundleresult` → `copyBundleResult`).
+- **Docs**: Added `ARCHITECTURE.md`, `src/README.md`, updated `README.md` and `wrangler.toml` comments.
+
 ## [2.1.20260811144522] - 2026-08-11 14:45:22
 
 ### Change

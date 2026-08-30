@@ -1,0 +1,16 @@
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"moduleResolution": "node",
+		"allowJs": true,
+		"checkJs": false,
+		"strict": false,
+		"baseUrl": ".",
+		"paths": {
+			"~/*": ["src/*"]
+		}
+	},
+	"include": ["src/**/*.js", "_worker.js", "_worker.legacy.js"],
+	"exclude": ["node_modules", ".wrangler", "dist"]
+}
