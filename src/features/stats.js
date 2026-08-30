@@ -36,13 +36,13 @@ export class Manager extends Feature {
 		return Manager;
 	}
 
-	register(counter) {
+	register() {
 		throw new Error('stats manager register not implemented');
 	}
-	getOrRegister(name, init = 0) {
+	getOrRegister() {
 		throw new Error('stats manager getOrRegister not implemented');
 	}
-	unregister(name) {
+	unregister() {
 		throw new Error('stats manager unregister not implemented');
 	}
 }

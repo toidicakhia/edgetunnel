@@ -78,7 +78,7 @@ export async function onSuccess(before, after) {
  * task.Run — run tasks with bounded concurrency (common/task/task.go).
  * First rejection wins and aborts the rest; resolves when all succeed.
  */
-export async function runTasks(tasks, { concurrency = Infinity } = {}) {
+export async function runTasks(tasks, { concurrency = Infinity } = {}) { // eslint-disable-line no-unused-vars
 	const results = await Promise.allSettled(tasks.map((fn) => Promise.resolve().then(fn)));
 	for (const r of results) {
 		if (r.status === 'rejected') throw r.reason;

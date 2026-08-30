@@ -65,7 +65,6 @@ export function cidrMatcher(cidr) {
 		if (!hostname.includes(':')) return false;
 		const groups = expand(hostname);
 		for (let i = 0; i < 8; i++) {
-			const shift = (7 - i) * 16;
 			if (prefix <= BigInt(i * 16)) return true; // outside this group's bits
 			const groupBits = prefix - BigInt(i * 16) > 16n ? 16n : prefix - BigInt(i * 16);
 			const mask = ((1n << groupBits) - 1n) << (16n - groupBits);

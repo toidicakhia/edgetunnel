@@ -3,7 +3,7 @@
  * SOCKS5 chain-proxy client (CONNECT handshake) — split from src/core/proxy.js
  * (rewrite by Xray-core layout; matches proxy/socks client semantics).
  */
-import { getValidDataLength, safeCloseAll, toUint8Array } from '../../utils/helpers.js';
+import { getValidDataLength, safeCloseAll } from '../../utils/helpers.js';
 
 export async function socks5Connect(
 	targetHost,

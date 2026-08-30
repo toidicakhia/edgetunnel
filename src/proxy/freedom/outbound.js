@@ -158,7 +158,7 @@ export class FreedomHandler extends Handler {
 				},
 				onError: (err) => settle(reject, err),
 			});
-			const down = pumpStream(socket.readable, link.writable, {
+			pumpStream(socket.readable, link.writable, {
 				onError: (err) => {
 					up.close();
 					settle(reject, err);
