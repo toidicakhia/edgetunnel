@@ -850,16 +850,16 @@ export function parseVMessInnerHeader(headerBytes) {
 	if (headerBytes.length < offset + 4) return null;
 	const fnv = headerBytes.slice(offset, offset + 4);
 	offset += 4;
-	// Verify FNV1a
-	const hash = fnv1a(headerBytes.slice(0, headerBytes.length - 4));
+	// Verify FNV1a — Xray-core rejects mismatches (encoding/server.go)
+	const hash = fnv1a(headerBytes.slice(0, offset - 4));
 	const expected = (fnv[0] << 24) | (fnv[1] << 16) | (fnv[2] << 8) | fnv[3];
-	if (hash >>> 0 !== expected >>> 0) {
-		// Warning or continue leniently
-	}
-	// Map security
+	if (hash >>> 0 !== expected >>> 0) return null;
+	// Map security (Xray/V2Ray SecurityType: 0=Unknown/Auto, 1=Legacy, 2=Auto, 3=AES128-GCM, 4=ChaCha20-Poly1305, 5=None)
 	let secType;
 	switch (security) {
 		case 0:
+		case 1:
+		case 2:
 			secType = 'auto';
 			break;
 		case 3:
@@ -916,7 +916,7 @@ export async function parseVMessRequest(chunk, uuidStr) {
 		return { hasError: true, message: 'VMess AuthID invalid' };
 	}
 	const timeDiff = Math.abs(decoded.timeSec - nowSec);
-	if (timeDiff > 120) {
+	if (timeDiff > 300) {
 		return { hasError: true, message: 'VMess AuthID timestamp expired' };
 	}
 
@@ -1049,6 +1049,7 @@ export async function* vmessBodyReader(buffer, bodyKey, bodyIV, security, option
 }
 
 // For encoding response (server to client) - generates VMess AEAD response header
+// responseHeaderByte: byte đã thỏa thuận trong inner header (Xray-core server.go: EncodeResponseHeader)
 export async function vmessCreateResponseHeader(responseHeaderByte, bodyKey, bodyIV) {
 	const bodyKeyHash = new PureSha256().update(bodyKey).digest();
 	const bodyIVHash = new PureSha256().update(bodyIV).digest();
@@ -1059,8 +1060,9 @@ export async function vmessCreateResponseHeader(responseHeaderByte, bodyKey, bod
 	const payloadKey = vmessKDF16(respKey, KDFSaltConstAEADRespHeaderPayloadKey);
 	const payloadNonce = vmessKDF(respIV, KDFSaltConstAEADRespHeaderPayloadIV).slice(0, 12);
 
-	// In Xray-core server.go: plainHeader is [Option, Command] = [0, 0] (2 bytes)
-	const plainHeader = new Uint8Array([0, 0]);
+	// Xray-core server.go EncodeResponseHeader: [responseHeader, Option=0x00]
+	// responseHeaderByte là byte client gửi trong inner header, server phải echo lại đúng
+	const plainHeader = new Uint8Array([responseHeaderByte, 0x00]);
 	const lenPlain = new Uint8Array([(plainHeader.length >>> 8) & 0xff, plainHeader.length & 0xff]);
 	const lenCt = await aesGcmEncrypt(lenKey, lenNonce, lenPlain, new Uint8Array(0));
 	const payloadCt = await aesGcmEncrypt(payloadKey, payloadNonce, plainHeader, new Uint8Array(0));

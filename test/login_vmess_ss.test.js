@@ -107,6 +107,64 @@ test('VMess AEAD: Full Handshake & Authentication (Login) Verification', async (
 	assert.equal(serverParseWrong.hasError, true);
 });
 
+test('VMess AEAD: SecurityType AUTO (2) and GlobalPadding (0x08) Verification', async () => {
+	const uuid = 'd342d11e-d424-4583-b36e-524ab1f0afa4';
+	const cmdKey = await getCmdKey(uuid);
+	const nowSec = Math.floor(Date.now() / 1000);
+
+	const authID = await createAuthID(cmdKey, nowSec);
+	const bodyIV = crypto.getRandomValues(new Uint8Array(16));
+	const bodyKey = crypto.getRandomValues(new Uint8Array(16));
+	const port = 443;
+	const ip = [1, 1, 1, 1];
+
+	const innerLen = 1 + 16 + 16 + 1 + 1 + 1 + 1 + 1 + 2 + 1 + 4 + 4;
+	const innerHeader = new Uint8Array(innerLen);
+	let offset = 0;
+	innerHeader[offset++] = 1;
+	innerHeader.set(bodyIV, offset); offset += 16;
+	innerHeader.set(bodyKey, offset); offset += 16;
+	innerHeader[offset++] = 0x66;
+	innerHeader[offset++] = 0x01 | 0x04 | 0x08; // ChunkStream | ChunkMasking | GlobalPadding
+	innerHeader[offset++] = (0 << 4) | 2; // SecurityType_AUTO = 2
+	innerHeader[offset++] = 0;
+	innerHeader[offset++] = 1;
+	innerHeader[offset++] = (port >>> 8) & 0xff;
+	innerHeader[offset++] = port & 0xff;
+	innerHeader[offset++] = 1;
+	innerHeader.set(ip, offset); offset += 4;
+
+	const hash = fnv1a(innerHeader.slice(0, offset));
+	innerHeader[offset++] = (hash >>> 24) & 0xff;
+	innerHeader[offset++] = (hash >>> 16) & 0xff;
+	innerHeader[offset++] = (hash >>> 8) & 0xff;
+	innerHeader[offset++] = hash & 0xff;
+
+	const nonce = crypto.getRandomValues(new Uint8Array(8));
+	const lenKey = await vmessKDF16(cmdKey, KDFSaltConstVMessHeaderPayloadLengthAEADKey, authID, nonce);
+	const lenNonce = (await vmessKDF(cmdKey, KDFSaltConstVMessHeaderPayloadLengthAEADIV, authID, nonce)).slice(0, 12);
+	const lenPlain = new Uint8Array([(innerHeader.length >>> 8) & 0xff, innerHeader.length & 0xff]);
+	const encryptedLen = await aesGcmEncrypt(lenKey, lenNonce, lenPlain, authID);
+
+	const headerKey = await vmessKDF16(cmdKey, KDFSaltConstVMessHeaderPayloadAEADKey, authID, nonce);
+	const headerNonce = (await vmessKDF(cmdKey, KDFSaltConstVMessHeaderPayloadAEADIV, authID, nonce)).slice(0, 12);
+	const encryptedHeader = await aesGcmEncrypt(headerKey, headerNonce, innerHeader, authID);
+
+	const fullPacket = new Uint8Array(authID.length + encryptedLen.length + nonce.length + encryptedHeader.length);
+	let pOffset = 0;
+	fullPacket.set(authID, pOffset); pOffset += authID.length;
+	fullPacket.set(encryptedLen, pOffset); pOffset += encryptedLen.length;
+	fullPacket.set(nonce, pOffset); pOffset += nonce.length;
+	fullPacket.set(encryptedHeader, pOffset);
+
+	const serverParse = await parseVMessRequest(fullPacket, uuid);
+	assert.equal(serverParse.hasError, false);
+	assert.equal(serverParse.hostname, '1.1.1.1');
+	assert.equal(serverParse.port, 443);
+	assert.equal(serverParse.security, 'aes-128-gcm');
+	assert.equal(serverParse.option & 0x08, 0x08);
+});
+
 test('Shadowsocks AEAD: Full Handshake & Authentication (Login) Verification', async () => {
 	const password = 'd342d11e-d424-4583-b36e-524ab1f0afa4'; // Using UUID as password
 	const cipherConfig = SS_SUPPORTED_CIPHERS['aes-128-gcm'];
@@ -177,3 +235,30 @@ test('Shadowsocks AEAD: Full Handshake & Authentication (Login) Verification', a
 		await SSAEADDecrypt(wrongSessionKey, wrongNonce, receivedEncLength);
 	}, /operation failed|tag mismatch|decryption failed/i);
 });
+
+test('VMess Early-Data: isValidWSEarlyData and decodeWSEarlyData Verification', async () => {
+	const { isValidWSEarlyData, decodeWSEarlyData } = await import('../src/handlers/ws.js');
+	const uuid = 'd342d11e-d424-4583-b36e-524ab1f0afa4';
+	const cmdKey = await getCmdKey(uuid);
+	const nowSec = Math.floor(Date.now() / 1000);
+
+	const authID = await createAuthID(cmdKey, nowSec);
+	assert.equal(authID.length, 16);
+
+	// Test isValidWSEarlyData directly on authID
+	assert.equal(isValidWSEarlyData(authID, uuid), true);
+
+	// Test decodeWSEarlyData with base64url encoded authID
+	let binary = '';
+	for (let i = 0; i < authID.length; i++) binary += String.fromCharCode(authID[i]);
+	const b64 = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+
+	const decoded = decodeWSEarlyData(b64, uuid);
+	assert.ok(decoded);
+	assert.deepEqual(Array.from(decoded), Array.from(authID));
+
+	// Test wrong token
+	const wrongUUID = '00000000-0000-0000-0000-000000000000';
+	assert.equal(decodeWSEarlyData(b64, wrongUUID), null);
+});
+

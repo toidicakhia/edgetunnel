@@ -141,8 +141,8 @@ test('vmessCreateResponseHeader creates valid decryptable response header', asyn
 
 	const payloadK = await crypto.subtle.importKey('raw', payloadKey, { name: 'AES-GCM' }, false, ['decrypt']);
 	const payloadPt = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: payloadNonce }, payloadK, resp.slice(18)));
-	assert.equal(payloadPt[0], 0); // Option 0
-	assert.equal(payloadPt[1], 0); // Command 0
+	assert.equal(payloadPt[0], respHeaderByte); // Echoed responseHeader
+	assert.equal(payloadPt[1], 0); // Option 0
 });
 
 test('vmessEncryptChunk and vmessDecryptChunk roundtrip across multiple counts', async () => {

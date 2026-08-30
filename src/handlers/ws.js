@@ -36,23 +36,26 @@ import {
 	vmessDecryptChunk,
 	PureSha256,
 	ShakeSizeParser,
+	getCmdKey,
+	decodeAuthID,
 } from '../core/vmess.js';
 
 
 export function isValidWSEarlyData(bytes, token) {
 	if (!bytes?.byteLength) return false;
-	if (bytes.byteLength >= 18 && uuidBytesMatch(bytes, 1, token)) return true;
-	if (bytes.byteLength >= 50) {
-		if (bytes.byteLength >= 58 && bytes[56] === 0x0d && bytes[57] === 0x0a) {
-			// Trojan check handled below
-		} else {
-			return true;
-		}
+	if (bytes.byteLength >= 18 && bytes[0] === 0 && uuidBytesMatch(bytes, 1, token)) return true;
+	if (bytes.byteLength >= 16) {
+		try {
+			const cmdKey = getCmdKey(token);
+			if (decodeAuthID(bytes.subarray(0, 16), cmdKey)) return true;
+		} catch {}
 	}
-	if (bytes.byteLength < 58 || bytes[56] !== 0x0d || bytes[57] !== 0x0a) return false;
-
-	const expectedHashes = getTrojanPasswordHashes(token);
-	return matchTrojanPassword(bytes, expectedHashes);
+	if (bytes.byteLength >= 58 && bytes[56] === 0x0d && bytes[57] === 0x0a) {
+		const expectedHashes = getTrojanPasswordHashes(token);
+		return matchTrojanPassword(bytes, expectedHashes);
+	}
+	if (bytes.byteLength >= 50) return true;
+	return false;
 }
 
 export function decodeWSEarlyData(header, token) {
@@ -621,8 +624,6 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 		if (vmessContext) return vmessContext;
 		if (!vmessInitTask) {
 			vmessInitTask = (async () => {
-				// VMess context will be initialized on first packet via handleVMessData
-				// This is a placeholder for lazy init
 				vmessContext = {
 					bodyKey: null,
 					bodyIV: null,
@@ -634,6 +635,8 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 					targetPort: 0,
 					buffer: new Uint8Array(0),
 					count: 0,
+					respHeaderSent: false,
+					respCount: 0,
 					responseSocket: null,
 				};
 				return vmessContext;
@@ -645,11 +648,22 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 	const handleVMessData = async (chunk) => {
 		const ctx = await getVMessContext();
 		const data = toUint8Array(chunk);
-		// If first packet not yet established, we need to parse VMess header
+		// Nếu first packet chưa được xử lý
 		if (!ctx.firstPacketEstablished) {
-			// Try to parse as VMess
-			const parsed = await parseVMessRequest(data, yourUUID);
-			if (parsed.hasError) throw new Error(parsed.message || 'Invalid VMess request');
+			ctx.buffer = concatByteData(ctx.buffer, data);
+			if (ctx.buffer.byteLength < 58) return;
+
+			const parsed = await parseVMessRequest(ctx.buffer, yourUUID);
+			if (parsed.hasError) {
+				if (
+					(parsed.message?.includes('too short') || parsed.message?.includes('AEAD open failed')) &&
+					ctx.buffer.byteLength < 2048
+				) {
+					return; // Wait for more data
+				}
+				throw new Error(parsed.message || 'Invalid VMess request');
+			}
+			ctx.buffer = new Uint8Array(0);
 			ctx.targetHost = parsed.hostname;
 			ctx.targetPort = parsed.port;
 			ctx.bodyKey = parsed.bodyKey;
@@ -658,6 +672,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			ctx.option = parsed.option;
 			ctx.responseHeader = parsed.responseHeader;
 			ctx.firstPacketEstablished = true;
+			log(`[VMess] parsed: host=${ctx.targetHost}:${ctx.targetPort} sec=${ctx.security} rawLen=${parsed.rawClientData?.byteLength ?? 0}`);
 
 			// Handle speed test
 			if (isSpeedTestSite(ctx.targetHost) && proxyContext.proxyType === null) {
@@ -687,51 +702,80 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			ctx.respCount = 0;
 			ctx.respHeaderSent = false;
 			ctx.respShakeParser = (ctx.option & 0x04) ? new ShakeSizeParser(ctx.respBodyIV) : null;
-			ctx.reqShakeParser = (ctx.option & 0x04) ? new ShakeSizeParser(ctx.bodyIV) : null;
+			ctx.reqShakeParser = ((ctx.option & 0x04) || (ctx.option & 0x08)) ? new ShakeSizeParser(ctx.bodyIV) : null;
 
-			// Create VMess response socket that encrypts response
+			// Create VMess response socket that encrypts response with sequential queue
+			let sendQueue = Promise.resolve();
 			const vmessResponseSocket = {
 				get readyState() {
 					return serverSock.readyState;
 				},
-				async send(data) {
-					const chunk = toUint8Array(data);
-					if (!chunk.byteLength) return;
-					let headerBytes = new Uint8Array(0);
-					if (!ctx.respHeaderSent) {
-						ctx.respHeaderSent = true;
-						headerBytes = await vmessCreateResponseHeader(
-							ctx.responseHeader,
-							ctx.bodyKey,
-							ctx.bodyIV
-						);
-					}
-					if (ctx.security === 'none') {
-						const lenBuf = new Uint8Array([(chunk.length >>> 8) & 0xff, chunk.length & 0xff]);
-						const packet = headerBytes.length
-							? concatByteData(headerBytes, concatByteData(lenBuf, chunk))
-							: concatByteData(lenBuf, chunk);
-						await webSocketSendAndAwait(serverSock, packet);
-					} else {
-						const encChunk = await vmessEncryptChunk(
-							chunk,
-							ctx.respBodyKey,
-							ctx.respBodyIV,
-							ctx.respCount++,
-							ctx.security === 'auto' ? 'aes-128-gcm' : ctx.security
-						);
-						let lenBuf;
-						if (ctx.respShakeParser) {
-							lenBuf = ctx.respShakeParser.encode(encChunk.length);
-						} else {
-							lenBuf = new Uint8Array([(encChunk.length >>> 8) & 0xff, encChunk.length & 0xff]);
-						}
-						const bodyPacket = concatByteData(lenBuf, encChunk);
-						const packet = headerBytes.length
-							? concatByteData(headerBytes, bodyPacket)
-							: bodyPacket;
-						await webSocketSendAndAwait(serverSock, packet);
-					}
+				send(dataChunk) {
+					sendQueue = sendQueue
+						.then(async () => {
+							if (serverSock.readyState !== WebSocket.OPEN) return;
+							const chunkBytes = toUint8Array(dataChunk);
+							if (!chunkBytes.byteLength) return;
+							let headerBytes = new Uint8Array(0);
+							if (!ctx.respHeaderSent) {
+								ctx.respHeaderSent = true;
+								headerBytes = await vmessCreateResponseHeader(
+									ctx.responseHeader,
+									ctx.bodyKey,
+									ctx.bodyIV
+								);
+							}
+							// VMess protocol max chunk plaintext size is 16384 - 16 = 16368 bytes (2^14 limit)
+							const maxChunkPlain = 16384 - 16;
+							let offset = 0;
+							let isFirstInSend = true;
+							while (offset < chunkBytes.byteLength) {
+								const end = Math.min(offset + maxChunkPlain, chunkBytes.byteLength);
+								const slice = chunkBytes.subarray(offset, end);
+								offset = end;
+								if (ctx.security === 'none') {
+									const lenBuf = new Uint8Array([
+										(slice.length >>> 8) & 0xff,
+										slice.length & 0xff,
+									]);
+									const slicePacket = concatByteData(lenBuf, slice);
+									const packet =
+										isFirstInSend && headerBytes.length
+											? concatByteData(headerBytes, slicePacket)
+											: slicePacket;
+									await webSocketSendAndAwait(serverSock, packet);
+								} else {
+									const encChunk = await vmessEncryptChunk(
+										slice,
+										ctx.respBodyKey,
+										ctx.respBodyIV,
+										ctx.respCount++,
+										ctx.security === 'auto' ? 'aes-128-gcm' : ctx.security
+									);
+									let lenBuf;
+									if (ctx.respShakeParser) {
+										lenBuf = ctx.respShakeParser.encode(encChunk.length);
+									} else {
+										lenBuf = new Uint8Array([
+											(encChunk.length >>> 8) & 0xff,
+											encChunk.length & 0xff,
+										]);
+									}
+									const bodyPacket = concatByteData(lenBuf, encChunk);
+									const packet =
+										isFirstInSend && headerBytes.length
+											? concatByteData(headerBytes, bodyPacket)
+											: bodyPacket;
+									await webSocketSendAndAwait(serverSock, packet);
+								}
+								isFirstInSend = false;
+							}
+						})
+						.catch((error) => {
+							log(`[VMess-send] encryption failed: ${error?.message || error}`);
+							closeSocketQuietly(serverSock);
+						});
+					return sendQueue;
 				},
 				close() {
 					closeSocketQuietly(serverSock);
@@ -741,6 +785,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 
 			// Decrypt all full chunks available in rawClientData
 			let firstPlaintext = new Uint8Array(0);
+			const hasPadding = (ctx.option & 0x08) !== 0;
 			if (parsed.rawClientData && parsed.rawClientData.byteLength) {
 				ctx.buffer = concatByteData(ctx.buffer, parsed.rawClientData);
 				if (ctx.security === 'none') {
@@ -773,6 +818,12 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 						} catch (e) {
 							throw new Error('VMess chunk decrypt failed: ' + e.message);
 						}
+						if (hasPadding && ctx.reqShakeParser) {
+							const padLen = ctx.reqShakeParser.nextPaddingLen();
+							if (decrypted.length >= padLen) {
+								decrypted = decrypted.subarray(0, decrypted.length - padLen);
+							}
+						}
 						if (decrypted && decrypted.byteLength) {
 							firstPlaintext = concatByteData(firstPlaintext, decrypted);
 						}
@@ -781,6 +832,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			}
 
 			// Establish TCP connection ONCE with all decrypted initial plaintext
+			log(`[VMess] forwardTCP: ${ctx.targetHost}:${ctx.targetPort} plainLen=${firstPlaintext.byteLength} sec=${ctx.security}`);
 			await forwardTCP(
 				ctx.targetHost,
 				ctx.targetPort,
@@ -800,6 +852,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			await writeToRemote(data);
 			return;
 		}
+		const hasPadding = (ctx.option & 0x08) !== 0;
 		ctx.buffer = concatByteData(ctx.buffer, data);
 		while (ctx.buffer.length >= 2) {
 			let len;
@@ -826,6 +879,12 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 				);
 			} catch (e) {
 				throw new Error('VMess chunk decrypt failed: ' + e.message);
+			}
+			if (hasPadding && ctx.reqShakeParser) {
+				const padLen = ctx.reqShakeParser.nextPaddingLen();
+				if (decrypted.length >= padLen) {
+					decrypted = decrypted.subarray(0, decrypted.length - padLen);
+				}
 			}
 			if (decrypted && decrypted.byteLength) {
 				await writeToRemote(decrypted);
@@ -855,24 +914,30 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 		if (await writeToRemote(chunk)) return;
 
 		if (determineProtocolType === null) {
-			if (url.searchParams.get('enc')) determineProtocolType = 'ss';
-			else {
+			if (url.searchParams.get('enc')) {
+				determineProtocolType = 'ss';
+			} else {
 				currentChunkBytes = currentChunkBytes || toUint8Array(chunk);
 				const bytes = currentChunkBytes;
-				// Try VMess first (AEAD) - need async check
-				let isVMess = false;
-				if (bytes.byteLength >= 50) {
+				if (bytes.byteLength >= 18 && bytes[0] === 0 && uuidBytesMatch(bytes, 1, yourUUID)) {
+					determineProtocolType = 'VLESS';
+				} else if (
+					bytes.byteLength >= 58 &&
+					bytes[56] === 0x0d &&
+					bytes[57] === 0x0a &&
+					matchTrojanPassword(bytes, getTrojanPasswordHashes(yourUUID))
+				) {
+					determineProtocolType = 'trojan';
+				} else if (bytes.byteLength >= 16) {
 					try {
-						const vmessTry = await parseVMessRequest(bytes, yourUUID);
-						if (!vmessTry.hasError) {
+						const cmdKey = getCmdKey(yourUUID);
+						if (decodeAuthID(bytes.subarray(0, 16), cmdKey)) {
 							determineProtocolType = 'vmess';
-							isVMess = true;
 						}
-					} catch {
-						// not vmess
-					}
+					} catch {}
 				}
-				if (!isVMess) {
+
+				if (determineProtocolType === null) {
 					const isTrojanDelimiter =
 						bytes.byteLength >= 58 && bytes[56] === 0x0d && bytes[57] === 0x0a;
 					const isValidTrojanCmd =
@@ -1058,15 +1123,20 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 	if (!ssModeDisableEarlyData && earlyDataHeader) {
 		try {
 			const bytes = decodeWSEarlyData(earlyDataHeader, yourUUID);
-			if (bytes?.byteLength) enqueueWSExplicitTransfer(bytes.buffer);
+			if (bytes?.byteLength) enqueueWSExplicitTransfer(bytes);
 		} catch (error) {
 			handleWSExplicitTransferError(error);
 		}
 	}
 
+	const responseHeaders = { 'Sec-WebSocket-Extensions': '' };
+	if (earlyDataHeader) {
+		responseHeaders['Sec-WebSocket-Protocol'] = earlyDataHeader;
+	}
+
 	return new Response(null, {
 		status: 101,
 		webSocket: clientSock,
-		headers: { 'Sec-WebSocket-Extensions': '' },
+		headers: responseHeaders,
 	});
 }
