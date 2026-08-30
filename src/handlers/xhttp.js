@@ -152,11 +152,19 @@ export async function handleXHTTPRequest(request, yourUUID, proxyContext = {}) {
 					if (offset + len > buf.length) break;
 					const chunk = buf.slice(offset, offset + len);
 					offset += len;
-					const dec = await vmessDecryptChunk(chunk, vmessBodyKey, vmessBodyIV, count, vmessSecurity === 'auto' ? 'aes-128-gcm' : vmessSecurity);
+					const dec = await vmessDecryptChunk(
+						chunk,
+						vmessBodyKey,
+						vmessBodyIV,
+						count,
+						vmessSecurity === 'auto' ? 'aes-128-gcm' : vmessSecurity
+					);
 					decryptedFirst = concatByteData(decryptedFirst, dec);
 					count++;
 				}
-				vmessFirstBodyDecrypted = decryptedFirst.length ? decryptedFirst : new Uint8Array(0);
+				vmessFirstBodyDecrypted = decryptedFirst.length
+					? decryptedFirst
+					: new Uint8Array(0);
 				// If we decrypted something, use it as rawData, otherwise fallback to original
 				if (vmessFirstBodyDecrypted.length) firstPacket.rawData = vmessFirstBodyDecrypted;
 			} catch (e) {
@@ -510,7 +518,7 @@ export async function readXHTTPFirstPacket(reader, token) {
 
 	const tryParseTrojanFirstPacket = (data) => {
 		const passwordHash = sha224(token);
-		const passwordHashbytes = new TextEncoder().encode(passwordHash);
+		const passwordHashBytes = new TextEncoder().encode(passwordHash);
 		const length = data.byteLength;
 		if (length < 58) return { status: 'need_more' };
 		if (data[56] !== 0x0d || data[57] !== 0x0a) return { status: 'invalid' };

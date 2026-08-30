@@ -334,7 +334,7 @@ export async function httpsConnect(
 
 export function createRequestTCPConnector(request) {
 	const requestObj = /** @type {any} */ (request);
-	const fetcher = requestObject?.fetcher;
+	const fetcher = requestObj?.fetcher;
 	if (!fetcher || typeof fetcher.connect !== 'function')
 		throw new Error('request.fetcher.connect unavailable');
 	return (options, init) =>

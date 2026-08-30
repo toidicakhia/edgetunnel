@@ -528,9 +528,7 @@ export async function forwardUDP(udpChunk, webSocket, respHeader, request, respo
 					const wrapResult = responseWrapper
 						? await responseWrapper(rawResponse)
 						: rawResponse;
-					const sendFragmentList = Array.isArray(encapsulateResult)
-						? encapsulateResult
-						: [encapsulateResult];
+					const sendFragmentList = Array.isArray(wrapResult) ? wrapResult : [wrapResult];
 					if (!sendFragmentList.length) return;
 					if (webSocket.readyState !== WebSocket.OPEN) return;
 					for (const fragment of sendFragmentList) {

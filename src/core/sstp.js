@@ -168,7 +168,7 @@ export async function sstpConnect(proxy, targetHost, targetPort, tcpConnector) {
 	};
 	const parsePppOptions = (data) => {
 		const options = [];
-		for (let offset = 0; offset + 2 <= data.byteLength; ) {
+		for (let offset = 0; offset + 2 <= data.byteLength;) {
 			const type = data[offset];
 			const length = data[offset + 1];
 			if (length < 2 || offset + length > data.byteLength) break;

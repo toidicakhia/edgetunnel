@@ -134,7 +134,7 @@ export function clashSubscriptionHotPatch(Clash_originalsubscriptionContent, con
 	};
 	const addFlowFormatGRPCUserAgent = (nodeText) => {
 		if (!matchedGRPCNetwork(nodeText) || /grpc-user-agent\s*:/i.test(nodeText)) return nodeText;
-		if (/grpc-opts:\s*\{/i.test(nodeText)) return addInlineGrpcUserAgent(nodeText);
+		if (/grpc-opts:\s*\{/i.test(nodeText)) return addInlineGRPCUserAgent(nodeText);
 		return nodeText.replace(
 			/\}(\s*)$/,
 			`, grpc-opts: {grpc-user-agent: ${gRPCUserAgentYAML}}}$1`
@@ -176,7 +176,7 @@ export function clashSubscriptionHotPatch(Clash_originalsubscriptionContent, con
 		const grpcLine = nodeLines[grpcOptsIndex];
 		if (/^\s*grpc-opts:\s*\{.*\}\s*(?:#.*)?$/.test(grpcLine)) {
 			if (!/grpc-user-agent\s*:/i.test(grpcLine))
-				nodeLines[grpcOptsIndex] = addInlineGrpcUserAgent(grpcLine);
+				nodeLines[grpcOptsIndex] = addInlineGRPCUserAgent(grpcLine);
 			return nodeLines;
 		}
 		let blockEndIndex = nodeLines.length;
@@ -737,7 +737,7 @@ export function surgeSubscriptionHotPatch(content, url, config_JSON) {
 		? randomPath(config_JSON.fullNodePath)
 		: config_JSON.fullNodePath;
 	let outputContent = '';
-	for (let x of eachLine) {
+	for (let x of lineContent) {
 		if (x.includes('= tro' + 'jan,') && !x.includes('ws=true') && !x.includes('ws-path=')) {
 			const host = x.split('sni=')[1].split(',')[0];
 			const oldContent = `sni=${host}, skip-cert-verify=${config_JSON.skipCertVerify}`;
@@ -880,6 +880,7 @@ export async function readConfigJSON(
 	UA = 'Mozilla/5.0',
 	resetConfig = false
 ) {
+	let config_JSON;
 	const _p = featureCodeDict[0];
 	const host = hostname,
 		Ali_DoH = 'https://dns.alidns.com/dns-query',

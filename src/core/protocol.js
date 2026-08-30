@@ -138,7 +138,8 @@ export function parseTrojanRequest(buffer, passwordPlainText) {
 				data.subarray(addressIndex, addressIndex + addressLength)
 			);
 			break;
-		case 4: // IPv6
+		case 4: {
+			// IPv6
 			addressLength = 16;
 			if (data.byteLength < addressIndex + addressLength + 4)
 				return { hasError: true, message: 'invalid S5 request data' };
@@ -149,6 +150,7 @@ export function parseTrojanRequest(buffer, passwordPlainText) {
 			}
 			address = ipv6.join(':');
 			break;
+		}
 		default:
 			return { hasError: true, message: `invalid addressType is ${atype}` };
 	}
@@ -255,7 +257,7 @@ export function parseVLESSRequest(chunk, token) {
 				return { hasError: true, message: 'Invalid domain data' };
 			hostname = vlessTextDecoder.decode(data.subarray(addrValIdx, addrValIdx + addrLen));
 			break;
-		case 3:
+		case 3: {
 			addrLen = 16;
 			if (length < addrValIdx + addrLen)
 				return { hasError: true, message: 'Invalid IPv6 address length' };
@@ -266,6 +268,7 @@ export function parseVLESSRequest(chunk, token) {
 			}
 			hostname = ipv6.join(':');
 			break;
+		}
 		default:
 			return { hasError: true, message: `Invalid address type: ${addressType}` };
 	}

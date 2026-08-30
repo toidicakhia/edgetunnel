@@ -3,6 +3,7 @@
  * Auto-generated from _worker.js refactor
  * Original: edgetunnel 2.1 (2026-08-11)
  */
+import { debugLogging } from '../state.js';
 
 export function toUint8Array(data) {
 	if (data instanceof Uint8Array) return data;

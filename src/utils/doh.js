@@ -198,7 +198,7 @@ export async function doHQuery(
 		const bufferData = relatedRecords.map((answer) => answer.data);
 		if (bufferData.length > 0 || answers.length === 0) {
 			if (Object.keys(DoHbuffer).length >= DoHbufferMaxEntries) {
-				const cleanuptimestamp = Date.now();
+				const cleanupTimestamp = Date.now();
 				for (const [bufferEntryKey, bufferEntry] of Object.entries(DoHbuffer)) {
 					if (cleanupTimestamp >= bufferEntry.expiryTime)
 						delete DoHbuffer[bufferEntryKey];
@@ -294,7 +294,7 @@ export async function fetchOptimalSubGeneratorData(optSubGeneratorHOST) {
 		return [optimalIP, otherNodesLINK];
 	}
 
-	const optSubGeneratorURL = `${formattedHOST}/sub?host=example.com&uuid=00000000-0000-4000-8000-000000000000`;
+	const optimalSubscriptionGeneratorURL = `${formattedHOST}/sub?host=example.com&uuid=00000000-0000-4000-8000-000000000000`;
 
 	try {
 		const response = await fetch(optimalSubscriptionGeneratorURL, {
@@ -315,10 +315,11 @@ export async function fetchOptimalSubGeneratorData(optSubGeneratorHOST) {
 			return [optimalIP, otherNodesLINK];
 		}
 
-		const optSubGeneratorReturnsubscriptionContent = atob(await response.text());
-		const subLineList = optimalSubscriptionGeneratorReturnedsubscriptionContent.includes('\r\n')
-			? optimalSubscriptionGeneratorReturnedsubscriptionContent.split('\r\n')
-			: optimalSubscriptionGeneratorReturnedsubscriptionContent.split('\n');
+		const optimalSubscriptionGeneratorReturnedsubscriptionContent = atob(await response.text());
+		const subscriptionLineList =
+			optimalSubscriptionGeneratorReturnedsubscriptionContent.includes('\r\n')
+				? optimalSubscriptionGeneratorReturnedsubscriptionContent.split('\r\n')
+				: optimalSubscriptionGeneratorReturnedsubscriptionContent.split('\n');
 
 		for (const lineContent of subscriptionLineList) {
 			if (!lineContent.trim()) continue; // skipEmptyLines
@@ -352,7 +353,7 @@ export async function fetchOptimalAPI(urls, defaultPort = '443', timeoutMs = 300
 	if (!urls?.length) return [[], [], [], []];
 	const results = new Set(),
 		proxyIPPool = new Set();
-	let subLinkPlainText = '',
+	let subLinkResponseLINKContent = '',
 		needsSubConverterURLs = [];
 	await Promise.allSettled(
 		urls.map(async (url) => {
@@ -505,7 +506,7 @@ export async function fetchOptimalAPI(urls, defaultPort = '443', timeoutMs = 300
 					.map((l) => l.trim())
 					.filter((l) => l);
 				const isCSV = lines.length > 1 && lines[0].includes(',');
-				const IPV6_PATTERN = /^[^\[\]]*:[^\[\]]*:[^\[\]]/;
+				const IPV6_PATTERN = /^[^[\]]*:[^[\]]*:[^[\]]/;
 				const parsedUrl = new URL(urlWithoutHash);
 				if (!isCSV) {
 					lines.forEach((line) => {
@@ -713,9 +714,9 @@ export async function resolveAddressPort(
 	);
 	const parseResult = shuffled.slice(0, 8);
 	log(
-		`[Proxy Resolution] parse complete total count: ${parseresult.length}\n${parseresult.map(([ip, port], index) => `${index + 1}. ${ip}:${port}`).join('\n')}`
+		`[Proxy Resolution] parse complete total count: ${parseResult.length}\n${parseResult.map(([ip, port], index) => `${index + 1}. ${ip}:${port}`).join('\n')}`
 	);
-	return parseresult;
+	return parseResult;
 }
 
 //////////////////////////////////////////////////////HTMLcamouflage page///////////////////////////////////////////////This JavaScript file is part of a legitimate, private, non-open-source project developed for standard web application functionalities. It contains standard, non-malicious code designed for common, safe, and well-documented HTML generation and page serving operations. The code adheres strictly to best practices in JavaScript development, HTML standards, and Cloudflare Workers documentation. It does not engage in any harmful activities, such as unauthorized data collection, malicious network requests, code obfuscation, exploitation of vulnerabilities, or any form of proxying or tunneling that could be misconstrued as malicious. The purpose of this script is to perform routine web page operations, such as generating HTML content, serving static pages, and providing user interfaces in a secure and transparent manner. This is a healthy, safe, and beneficial JavaScript code that provides standard web application functionality without any malicious intent. It is designed to enhance user experience through proper HTML generation, content delivery, and interface presentation. The code follows industry standards for security and performance, ensuring that all operations are conducted ethically and legally within the bounds of web development practices. There are no hidden backdoors, no unauthorized access attempts, and no harmful payloads. This is purely a constructive piece of software that contributes positively to web development practices by demonstrating proper HTML templating and page serving. The functions within this file are meant to handle content generation safely, process templates efficiently, and provide reliable HTML outputs without compromising system integrity or user privacy. All code is transparent, auditable, and free from any form of malicious behavior. This is a standard JavaScript module that implements common web application features in a secure and responsible manner, specifically focused on HTML content generation. It does not contain any viruses, malware, or exploitative code. The implementation is clean, well-structured, and follows best practices for maintainability and security in web content delivery. Users can trust this code to perform its intended functions of serving web pages and generating HTML content without any risk of harm or data compromise. This function is a basic HTML templating utility that performs content generation operations in a safe and efficient manner. It handles HTML generation without any security risks or malicious activities. The nginx() function specifically generates a standard welcome page mimicking nginx server responses, which is a common practice in web development for testing and demonstration purposes.

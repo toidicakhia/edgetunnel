@@ -48,9 +48,9 @@ export async function handleGRPCRequest(request, yourUUID, proxyContext = {}) {
 			async start(controller) {
 				let isClosed = false;
 				let sendqueue = [];
-				let queuebyteCount = 0;
+				let queueByteCount = 0;
 				let flushTimer = null;
-				let flushMicrotaskQueued = false;
+				let flushMicrotaskisQueued = false;
 				const grpcBridge = {
 					readyState: WebSocket.OPEN,
 					send(data) {
@@ -76,7 +76,7 @@ export async function handleGRPCRequest(request, yourUUID, proxyContext = {}) {
 						frame.set(chunk, 6 + lenBytes.length);
 						sendqueue.push(frame);
 						queueByteCount += frame.byteLength;
-						scheduleflushSendQueue();
+						scheduleFlushSendQueue();
 					},
 					close() {
 						if (this.readyState === WebSocket.CLOSED) return;
@@ -250,7 +250,10 @@ export async function handleGRPCRequest(request, yourUUID, proxyContext = {}) {
 								if (isTrojan === null) {
 									// Try VMess first
 									try {
-										const vmessTry = await parseVMessRequest(firstPacketbytes, yourUUID);
+										const vmessTry = await parseVMessRequest(
+											firstPacketbytes,
+											yourUUID
+										);
 										if (!vmessTry.hasError) {
 											isVMess = true;
 											vmessParsed = vmessTry;
@@ -269,20 +272,45 @@ export async function handleGRPCRequest(request, yourUUID, proxyContext = {}) {
 									}
 								}
 								if (isVMess) {
-									const { port, hostname, isUDP, rawClientData, security, bodyKey, bodyIV, responseHeader } = vmessParsed;
-									log(`[gRPC] VMess firstPacket: ${hostname}:${port} | UDP: ${isUDP ? 'yes' : 'no'} | sec: ${security}`);
-									if (isSpeedTestSite(hostname) && proxyContext.proxyType === null) {
-										grpcBridge.send(buildLocal204Response(new Uint8Array([responseHeader || 0])));
+									const {
+										port,
+										hostname,
+										isUDP,
+										rawClientData,
+										security,
+										bodyKey,
+										bodyIV,
+										responseHeader,
+									} = vmessParsed;
+									log(
+										`[gRPC] VMess firstPacket: ${hostname}:${port} | UDP: ${isUDP ? 'yes' : 'no'} | sec: ${security}`
+									);
+									if (
+										isSpeedTestSite(hostname) &&
+										proxyContext.proxyType === null
+									) {
+										grpcBridge.send(
+											buildLocal204Response(
+												new Uint8Array([responseHeader || 0])
+											)
+										);
 										return;
 									}
 									if (isUDP) {
-										if (port !== 53) throw new Error('VMess UDP non-DNS not supported');
+										if (port !== 53)
+											throw new Error('VMess UDP non-DNS not supported');
 										isDnsQuery = true;
 										trojanUDPContext.targetHost = hostname;
 										trojanUDPContext.targetPort = port;
 										// For VMess UDP, rawClientData is first DNS query (may be chunked)
 										// Simplified: treat as raw
-										if (rawClientData && rawClientData.byteLength) await forwardUDP(rawClientData, grpcBridge, null, request);
+										if (rawClientData && rawClientData.byteLength)
+											await forwardUDP(
+												rawClientData,
+												grpcBridge,
+												null,
+												request
+											);
 									} else {
 										// For VMess TCP, need to handle body encryption
 										// For now, handle first body as raw (for none) or try to decrypt
@@ -290,18 +318,28 @@ export async function handleGRPCRequest(request, yourUUID, proxyContext = {}) {
 										// If security is not none, try to handle chunked body
 										// Simplified: forward as raw for now
 										grpcBridge.send(new Uint8Array([responseHeader || 0, 0]));
-										await forwardTCP(hostname, port, firstBody, grpcBridge, null, remoteConnWrapper, yourUUID, request, proxyContext);
+										await forwardTCP(
+											hostname,
+											port,
+											firstBody,
+											grpcBridge,
+											null,
+											remoteConnWrapper,
+											yourUUID,
+											request,
+											proxyContext
+										);
 									}
 								} else if (isTrojan) {
 									const parseResult = parseTrojanRequest(
 										firstPacketbytes,
 										yourUUID
 									);
-									if (parseresult?.hasError)
+									if (parseResult?.hasError)
 										throw new Error(
-											parseresult.message || 'Invalid trojan request'
+											parseResult.message || 'Invalid trojan request'
 										);
-									const { port, hostname, rawClientData, isUDP } = parseresult;
+									const { port, hostname, rawClientData, isUDP } = parseResult;
 									log(
 										`[gRPC] trojanfirstPacket: ${hostname}:${port} | UDP: ${isUDP ? 'yes' : 'no'}`
 									);
@@ -351,12 +389,12 @@ export async function handleGRPCRequest(request, yourUUID, proxyContext = {}) {
 										firstPacketbytes,
 										yourUUID
 									);
-									if (parseresult?.hasError)
+									if (parseResult?.hasError)
 										throw new Error(
-											parseresult.message || 'Invalid VLESS request'
+											parseResult.message || 'Invalid VLESS request'
 										);
 									const { port, hostname, version, isUDP, rawClientData } =
-										parseresult;
+										parseResult;
 									log(
 										`[gRPC] VLESSfirstPacket: ${hostname}:${port} | UDP: ${isUDP ? 'yes' : 'no'}`
 									);

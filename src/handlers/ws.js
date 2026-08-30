@@ -288,14 +288,14 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 						for (const cipherConfig of inboundCandidateCipherConfigs) {
 							const initMinLength =
 								offset + cipherConfig.saltLen + lengthCipherTotalLength;
-							if (inboundState.buffer.byteLength < initMinimumLength) continue;
+							if (inboundState.buffer.byteLength < initMinLength) continue;
 							const salt = inboundState.buffer.subarray(
 								offset,
 								offset + cipherConfig.saltLen
 							);
 							const lengthCipher = inboundState.buffer.subarray(
 								offset + cipherConfig.saltLen,
-								initMinimumLength
+								initMinLength
 							);
 							const masterKey = await getInboundMasterKeyTask(cipherConfig);
 							const decryptKey = await SSDeriveSessionKey(
@@ -323,8 +323,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 									log(
 										`[SS Inbound] URL enc=${requestCipherMethod || preferredCipherConfig.method} actual ${cipherConfig.method} inconsistent，autoSwitched`
 									);
-								inboundState.buffer =
-									inboundState.buffer.subarray(initMinimumLength);
+								inboundState.buffer = inboundState.buffer.subarray(initMinLength);
 								inboundState.decryptKey = decryptKey;
 								inboundState.nonceCounter = nonceCounter;
 								inboundState.waitPayloadLength = payloadLength;
@@ -335,8 +334,8 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 						}
 					}
 					const initFailureThresholdLength =
-						maxSaltLength + lengthCipherTotalLength + maxAlignScanBytes;
-					if (inboundState.buffer.byteLength >= initFailureThresholdlength) {
+						maxSaltLen + lengthCipherTotalLength + maxAlignScanBytes;
+					if (inboundState.buffer.byteLength >= initFailureThresholdLength) {
 						throw new Error(
 							`SS handshake decrypt failed (enc=${requestCipherMethod || 'auto'}, candidates=${inboundCandidateCipherConfigs.map((c) => c.method).join('/')})`
 						);
@@ -406,13 +405,13 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 					const outboundCipherConfig = inboundState.cipherConfig;
 					const outboundMasterKey = await SSDeriveMasterKey(
 						yourUUID,
-						outboundcipherConfig.keyLen
+						outboundCipherConfig.keyLen
 					);
 					const outboundRandomBytes = crypto.getRandomValues(
-						new Uint8Array(outboundcipherConfig.saltLen)
+						new Uint8Array(outboundCipherConfig.saltLen)
 					);
 					const outboundCipherKey = await SSDeriveSessionKey(
-						outboundcipherConfig,
+						outboundCipherConfig,
 						outboundMasterKey,
 						outboundRandomBytes,
 						['encrypt']
@@ -430,7 +429,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 							let offset = 0;
 							while (offset < plaintextData.byteLength) {
 								const end = Math.min(
-									offset + outboundcipherConfig.maxChunk,
+									offset + outboundCipherConfig.maxChunk,
 									plaintextData.byteLength
 								);
 								const payloadPlain = plaintextData.subarray(offset, end);
@@ -689,7 +688,9 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			}
 			// Create VMess response socket that encrypts response
 			const vmessResponseSocket = {
-				get readyState() { return serverSock.readyState; },
+				get readyState() {
+					return serverSock.readyState;
+				},
 				async send(data) {
 					const chunk = toUint8Array(data);
 					if (!chunk.byteLength) return;
@@ -700,7 +701,9 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 					// TODO: Implement proper VMess response AEAD encryption
 					await webSocketSendAndAwait(serverSock, chunk);
 				},
-				close() { closeSocketQuietly(serverSock); },
+				close() {
+					closeSocketQuietly(serverSock);
+				},
 			};
 			ctx.responseSocket = vmessResponseSocket;
 
@@ -712,7 +715,11 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 				// For now, if security is aes-128-gcm or auto, we need to decrypt the first body chunk
 				// Simplified: Assume firstBody is already the decrypted payload (for security none) or single chunk
 				// For aes-128-gcm, we try to decrypt the chunk
-				if (ctx.security === 'aes-128-gcm' || ctx.security === 'auto' || ctx.security === 'chacha20-poly1305') {
+				if (
+					ctx.security === 'aes-128-gcm' ||
+					ctx.security === 'auto' ||
+					ctx.security === 'chacha20-poly1305'
+				) {
 					// The firstBody may contain one or more VMess body chunks (length-prefixed)
 					// We need to parse the chunked body
 					let offset = 0;
@@ -728,28 +735,75 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 						try {
 							// Use vmessDecryptChunk helper
 							const { vmessDecryptChunk } = await import('../core/vmess.js');
-							decrypted = await vmessDecryptChunk(chunkData, ctx.bodyKey, ctx.bodyIV, ctx.count, ctx.security === 'auto' ? 'aes-128-gcm' : ctx.security);
+							decrypted = await vmessDecryptChunk(
+								chunkData,
+								ctx.bodyKey,
+								ctx.bodyIV,
+								ctx.count,
+								ctx.security === 'auto' ? 'aes-128-gcm' : ctx.security
+							);
 							ctx.count++;
 						} catch (e) {
 							// If decrypt fails, treat as raw
 							decrypted = chunkData;
 						}
 						if (decrypted && decrypted.byteLength) {
-							await forwardTCP(ctx.targetHost, ctx.targetPort, decrypted, vmessResponseSocket, null, remoteConnWrapper, yourUUID, request, proxyContext);
+							await forwardTCP(
+								ctx.targetHost,
+								ctx.targetPort,
+								decrypted,
+								vmessResponseSocket,
+								null,
+								remoteConnWrapper,
+								yourUUID,
+								request,
+								proxyContext
+							);
 						}
 					}
 					// Handle any remaining bytes as raw (for security none)
 					if (offset < firstBody.length) {
 						const remaining = firstBody.slice(offset);
-						if (remaining.byteLength) await forwardTCP(ctx.targetHost, ctx.targetPort, remaining, vmessResponseSocket, null, remoteConnWrapper, yourUUID, request, proxyContext);
+						if (remaining.byteLength)
+							await forwardTCP(
+								ctx.targetHost,
+								ctx.targetPort,
+								remaining,
+								vmessResponseSocket,
+								null,
+								remoteConnWrapper,
+								yourUUID,
+								request,
+								proxyContext
+							);
 					}
 				} else {
 					// none
-					await forwardTCP(ctx.targetHost, ctx.targetPort, firstBody, vmessResponseSocket, null, remoteConnWrapper, yourUUID, request, proxyContext);
+					await forwardTCP(
+						ctx.targetHost,
+						ctx.targetPort,
+						firstBody,
+						vmessResponseSocket,
+						null,
+						remoteConnWrapper,
+						yourUUID,
+						request,
+						proxyContext
+					);
 				}
 			} else {
 				// No first body, just establish TCP with empty data (will wait for next chunks)
-				await forwardTCP(ctx.targetHost, ctx.targetPort, new Uint8Array(0), vmessResponseSocket, null, remoteConnWrapper, yourUUID, request, proxyContext);
+				await forwardTCP(
+					ctx.targetHost,
+					ctx.targetPort,
+					new Uint8Array(0),
+					vmessResponseSocket,
+					null,
+					remoteConnWrapper,
+					yourUUID,
+					request,
+					proxyContext
+				);
 			}
 			return;
 		}
@@ -774,7 +828,13 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			let decrypted;
 			try {
 				const { vmessDecryptChunk } = await import('../core/vmess.js');
-				decrypted = await vmessDecryptChunk(chunkData, ctx.bodyKey, ctx.bodyIV, ctx.count, ctx.security === 'auto' ? 'aes-128-gcm' : ctx.security);
+				decrypted = await vmessDecryptChunk(
+					chunkData,
+					ctx.bodyKey,
+					ctx.bodyIV,
+					ctx.count,
+					ctx.security === 'auto' ? 'aes-128-gcm' : ctx.security
+				);
 				ctx.count++;
 			} catch (e) {
 				// If decrypt fails, try raw
@@ -785,7 +845,17 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 				if (ctx.responseSocket) {
 					await writeToRemote(decrypted);
 				} else {
-					await forwardTCP(ctx.targetHost, ctx.targetPort, decrypted, serverSock, null, remoteConnWrapper, yourUUID, request, proxyContext);
+					await forwardTCP(
+						ctx.targetHost,
+						ctx.targetPort,
+						decrypted,
+						serverSock,
+						null,
+						remoteConnWrapper,
+						yourUUID,
+						request,
+						proxyContext
+					);
 				}
 			}
 		}
@@ -826,7 +896,9 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 							determineProtocolType = 'vmess';
 							isVMess = true;
 						}
-					} catch (e) { /* not vmess */ }
+					} catch (e) {
+						/* not vmess */
+					}
 				}
 				if (!isVMess) {
 					determineProtocolType =
@@ -853,9 +925,9 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 		if (await writeToRemote(chunk)) return;
 		if (determineProtocolType === 'trojan') {
 			const parseResult = parseTrojanRequest(chunk, yourUUID);
-			if (parseresult?.hasError)
-				throw new Error(parseresult.message || 'Invalid trojan request');
-			const { port, hostname, rawClientData, isUDP } = parseresult;
+			if (parseResult?.hasError)
+				throw new Error(parseResult.message || 'Invalid trojan request');
+			const { port, hostname, rawClientData, isUDP } = parseResult;
 			if (isSpeedTestSite(hostname) && proxyContext.proxyType === null) {
 				await enableWSLocalSpeedTestMode(serverSock, null, rawClientData);
 				return;
@@ -898,9 +970,9 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			currentChunkBytes = currentChunkBytes || toUint8Array(chunk);
 			const bytes = currentChunkBytes;
 			const parseResult = parseVLESSRequest(bytes, yourUUID);
-			if (parseresult?.hasError)
-				throw new Error(parseresult.message || 'Invalid VLESS request');
-			const { port, hostname, version, isUDP, rawClientData } = parseresult;
+			if (parseResult?.hasError)
+				throw new Error(parseResult.message || 'Invalid VLESS request');
+			const { port, hostname, version, isUDP, rawClientData } = parseResult;
 			const respHeader = new Uint8Array([version, 0]);
 			if (isSpeedTestSite(hostname) && proxyContext.proxyType === null) {
 				await enableWSLocalSpeedTestMode(serverSock, respHeader, rawClientData);

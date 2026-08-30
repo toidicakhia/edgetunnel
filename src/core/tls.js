@@ -126,7 +126,7 @@ export async function tls12Prf(secret, label, seed, length, hash = 'SHA-256') {
 	const labelSeed = concatBytes(textEncoder.encode(label), seed);
 	let output = new Uint8Array(0),
 		currentA = labelSeed;
-	for (; output.length < length; ) {
+	for (; output.length < length;) {
 		currentA = await hmac(hash, secret, currentA);
 		const block = await hmac(hash, secret, concatBytes(currentA, labelSeed));
 		output = concatBytes(output, block);
@@ -495,7 +495,7 @@ export function parseServerHello(body) {
 		const extensionsLength = readUint16(body, offset);
 		offset += 2;
 		const extensionsEnd = offset + extensionsLength;
-		for (; offset + 4 <= extensionsEnd; ) {
+		for (; offset + 4 <= extensionsEnd;) {
 			const extensionType = readUint16(body, offset);
 			offset += 2;
 			const extensionLength = readUint16(body, offset);
@@ -562,7 +562,7 @@ export function parseEncryptedExtensions(body) {
 	const parsed = { alpn: null };
 	let offset = 2;
 	const extensionsEnd = 2 + readUint16(body, 0);
-	for (; offset + 4 <= extensionsEnd; ) {
+	for (; offset + 4 <= extensionsEnd;) {
 		const extensionType = readUint16(body, offset);
 		offset += 2;
 		const extensionLength = readUint16(body, offset);
@@ -777,14 +777,14 @@ export class TlsClient {
 	async readRecordsUntil(reader, predicate, closedError) {
 		for (;;) {
 			let record;
-			for (; (record = this.recordParser.next()); ) if (await predicate(record)) return;
+			for (; (record = this.recordParser.next());) if (await predicate(record)) return;
 			const { value, done } = await this.readChunk(reader);
 			if (done) throw new Error(closedError);
 			this.recordParser.feed(value);
 		}
 	}
 	async readHandshakeUntil(reader, predicate, closedError) {
-		for (let message; (message = this.handshakeParser.next()); )
+		for (let message; (message = this.handshakeParser.next());)
 			if (await predicate(message)) return;
 		return this.readRecordsUntil(
 			reader,
@@ -795,7 +795,7 @@ export class TlsClient {
 				}
 				if (record.type === CONTENT_TYPE_HANDSHAKE) {
 					this.handshakeParser.feed(record.fragment);
-					for (let message; (message = this.handshakeParser.next()); )
+					for (let message; (message = this.handshakeParser.next());)
 						if (await predicate(message)) return 1;
 				}
 			},
@@ -854,7 +854,7 @@ export class TlsClient {
 			const { value, done } = await this.readChunk(reader);
 			if (done) throw new Error('Connection closed waiting for ServerHello');
 			let record;
-			for (this.recordParser.feed(value); (record = this.recordParser.next()); ) {
+			for (this.recordParser.feed(value); (record = this.recordParser.next());) {
 				if (record.type === CONTENT_TYPE_ALERT) {
 					if (shouldIgnoreTlsAlert(record.fragment)) continue;
 					throw new Error(
@@ -1134,7 +1134,7 @@ export class TlsClient {
 					plaintext = decrypted.slice(0, -1);
 				if (innerType === CONTENT_TYPE_HANDSHAKE) {
 					this.handshakeParser.feed(plaintext);
-					for (let message; (message = this.handshakeParser.next()); )
+					for (let message; (message = this.handshakeParser.next());)
 						if ((await handleHandshakeMessage(message), serverFinishedReceived))
 							return 1;
 				}
@@ -1324,7 +1324,7 @@ export class TlsClient {
 					additionalData
 				);
 		let innerTypeIndex = decrypted.length - 1;
-		for (; innerTypeIndex >= 0 && !decrypted[innerTypeIndex]; ) innerTypeIndex--;
+		for (; innerTypeIndex >= 0 && !decrypted[innerTypeIndex];) innerTypeIndex--;
 		return innerTypeIndex < 0 ? EMPTY_BYTES : decrypted.slice(0, innerTypeIndex + 1);
 	}
 	async encryptTls13(data) {
@@ -1367,7 +1367,7 @@ export class TlsClient {
 						additionalData
 					);
 		let innerTypeIndex = plaintext.length - 1;
-		for (; innerTypeIndex >= 0 && !plaintext[innerTypeIndex]; ) innerTypeIndex--;
+		for (; innerTypeIndex >= 0 && !plaintext[innerTypeIndex];) innerTypeIndex--;
 		if (innerTypeIndex < 0)
 			return {
 				data: EMPTY_BYTES,
@@ -1407,7 +1407,7 @@ export class TlsClient {
 	async read() {
 		for (;;) {
 			let record;
-			for (; (record = this.recordParser.next()); ) {
+			for (; (record = this.recordParser.next());) {
 				if (record.type === CONTENT_TYPE_ALERT) {
 					if (record.fragment[1] === ALERT_CLOSE_NOTIFY) return null;
 					throw new Error(`TLS Alert: ${record.fragment[1]}`);
@@ -1423,7 +1423,7 @@ export class TlsClient {
 				}
 				if (type !== CONTENT_TYPE_HANDSHAKE) continue;
 				let message;
-				for (this.handshakeParser.feed(data); (message = this.handshakeParser.next()); )
+				for (this.handshakeParser.feed(data); (message = this.handshakeParser.next());)
 					if (
 						message.type !== HANDSHAKE_TYPE_NEW_SESSION_TICKET &&
 						message.type === HANDSHAKE_TYPE_KEY_UPDATE

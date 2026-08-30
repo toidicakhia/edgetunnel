@@ -116,7 +116,7 @@ export async function readTurnStunMessage(
 		messageBuffer.byteLength
 	);
 	const attributes = {};
-	for (let offset = 20; offset + 4 <= messageLength; ) {
+	for (let offset = 20; offset + 4 <= messageLength;) {
 		const type = view.getUint16(offset);
 		const length = view.getUint16(offset + 2);
 		if (offset + 4 + length > messageBuffer.byteLength) break;
