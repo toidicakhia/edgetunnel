@@ -289,7 +289,7 @@ export function poly1305Mac(key, message) {
 			);
 		})(key.slice(0, 16)),
 		sKey = key.slice(16, 32);
-	let accumulator = [0n, 0n, 0n, 0n, 0n];
+	const accumulator = [0n, 0n, 0n, 0n, 0n];
 	const rLimbs = [
 		0x3ffffffn & BigInt(rKey[0] | (rKey[1] << 8) | (rKey[2] << 16) | (rKey[3] << 24)),
 		0x3ffffffn & BigInt((rKey[3] >> 2) | (rKey[4] << 6) | (rKey[5] << 14) | (rKey[6] << 22)),
@@ -889,7 +889,6 @@ export class TlsClient {
 	async handshakeTls12(reader, writer) {
 		/** @type {{ namedCurve: number, serverPublicKey: Uint8Array } | null} */
 		let serverKeyExchange = null;
-		let sawServerHelloDone = !1;
 		if (
 			(await this.readHandshakeUntil(
 				reader,
@@ -909,7 +908,6 @@ export class TlsClient {
 						case HANDSHAKE_TYPE_SERVER_HELLO_DONE:
 							return (
 								this.recordHandshake(message.raw),
-								(sawServerHelloDone = !0),
 								1
 							);
 						case HANDSHAKE_TYPE_CERTIFICATE_REQUEST:

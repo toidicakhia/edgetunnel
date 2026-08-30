@@ -6,7 +6,6 @@
 import { featureCodeDict } from '../constants.js';
 import { identifyISP } from './network.js';
 import { log, parseToArray } from './helpers.js';
-import { nginx } from '../html/camouflage.js';
 
 export const CONNECT_TIMEOUT_MS = 9999;
 
@@ -276,8 +275,8 @@ export async function generateRandomIPs(request, count = 16, specifiedPort = -1)
 }
 
 export async function fetchOptimalSubGeneratorData(optSubGeneratorHOST) {
-	let optimalIP = [],
-		otherNodesLINK = '',
+	const optimalIP = [];
+	let otherNodesLINK = '',
 		formattedHOST = optSubGeneratorHOST
 			.replace(/^sub:\/\//i, 'https://')
 			.split('#')[0]
@@ -330,8 +329,8 @@ export async function fetchOptimalSubGeneratorData(optSubGeneratorHOST) {
 				// this is optimal IP line, extract domain:port#remark
 				const addressMatch = lineContent.match(/:\/\/[^@]+@([^?]+)/);
 				if (addressMatch) {
-					let addressPort = addressMatch[1],
-						remark = ''; // domain:portOrIP:port
+					const addressPort = addressMatch[1];
+					let remark = ''; // domain:portOrIP:port
 					const remarkMatch = lineContent.match(/#(.+)$/);
 					if (remarkMatch) remark = '#' + decodeURIComponent(remarkMatch[1]);
 					optimalIP.push(addressPort + remark);
@@ -352,9 +351,9 @@ export async function fetchOptimalSubGeneratorData(optSubGeneratorHOST) {
 export async function fetchOptimalAPI(urls, defaultPort = '443', timeoutMs = 3000) {
 	if (!urls?.length) return [[], [], [], []];
 	const results = new Set(),
-		proxyIPPool = new Set();
-	let subLinkResponseLINKContent = '',
+		proxyIPPool = new Set(),
 		needsSubConverterURLs = [];
+	let subLinkResponseLINKContent = '';
 	await Promise.allSettled(
 		urls.map(async (url) => {
 			// checkURLcontainsremarkName
@@ -397,7 +396,7 @@ export async function fetchOptimalAPI(urls, defaultPort = '443', timeoutMs = 300
 					} else if (otherNodesLINK && typeof otherNodesLINK === 'string') {
 						subLinkResponseLINKContent += otherNodesLINK;
 					}
-				} catch (e) {}
+				} catch {}
 				return;
 			}
 
@@ -437,7 +436,7 @@ export async function fetchOptimalAPI(urls, defaultPort = '443', timeoutMs = 300
 								// if replacement chars (U+FFFD)，encoding mismatch，continue trying next encoding
 								continue;
 							}
-						} catch (e) {
+						} catch {
 							// this encoding decode failed，try next
 							continue;
 						}
@@ -596,7 +595,7 @@ export async function fetchOptimalAPI(urls, defaultPort = '443', timeoutMs = 300
 						});
 					}
 				}
-			} catch (e) {}
+			} catch {}
 		})
 	);
 	// convert LINK to array and dedup
@@ -646,14 +645,15 @@ export async function resolveAddressPort(
 	}
 
 	const proxyIPArray = await parseToArray(proxyIP);
-	let allProxyArray = [];
+	const allProxyArray = [];
 	const ipv4Regex =
 		/^(25[0-5]|2[0-4]\d|[01]?\d\d?)\.(25[0-5]|2[0-4]\d|[01]?\d\d?)\.(25[0-5]|2[0-4]\d|[01]?\d\d?)\.(25[0-5]|2[0-4]\d|[01]?\d\d?)$/;
 	const ipv6Regex = /^\[?(?:[a-fA-F0-9]{0,4}:){1,7}[a-fA-F0-9]{0,4}\]?$/;
 
 	// iterate over eachIPelementprocess
 	for (const singleProxyIP of proxyIPArray) {
-		let [address, port] = resolveAddressPortstr(singleProxyIP);
+		const [address, defaultPort] = resolveAddressPortstr(singleProxyIP);
+		let port = defaultPort;
 
 		if (singleProxyIP.includes('.tp')) {
 			const tpMatch = singleProxyIP.match(/\.tp(\d+)/);

@@ -4,11 +4,11 @@
  * Original: edgetunnel 2.1 (2026-08-11)
  */
 import { TlsClient } from './tls.js';
-import { base64SecretDecode } from '../utils/crypto.js';
-import { concatByteData, log, toUint8Array } from '../utils/helpers.js';
-import { getValidDataLength } from '../handlers/xhttp.js';
+import { concatByteData, getValidDataLength, log, toUint8Array } from '../utils/helpers.js';
 import { isIPHostname, stripIPv6Brackets } from '../utils/network.js';
 import { parseTrojanProxyAddress } from './protocol.js';
+import { base64SecretDecode } from '../utils/crypto.js';
+
 
 export async function socks5Connect(
 	targetHost,
@@ -73,13 +73,13 @@ export async function socks5Connect(
 	} catch (error) {
 		try {
 			writer.releaseLock();
-		} catch (e) {}
+		} catch {}
 		try {
 			reader.releaseLock();
-		} catch (e) {}
+		} catch {}
 		try {
 			socket.close();
-		} catch (e) {}
+		} catch {}
 		throw error;
 	}
 }
@@ -170,13 +170,13 @@ export async function httpConnect(
 	} catch (error) {
 		try {
 			writer.releaseLock();
-		} catch (e) {}
+		} catch {}
 		try {
 			reader.releaseLock();
-		} catch (e) {}
+		} catch {}
 		try {
 			socket.close();
-		} catch (e) {}
+		} catch {}
 		throw error;
 	}
 }
@@ -210,7 +210,7 @@ export async function httpsConnect(
 		} catch (error) {
 			try {
 				proxySocket.close();
-			} catch (e) {}
+			} catch {}
 			throw error;
 		}
 	};
@@ -286,7 +286,7 @@ export async function httpsConnect(
 		const close = () => {
 			try {
 				tlsSocket.close();
-			} catch (e) {}
+			} catch {}
 			settleClosed(resolveClosed);
 		};
 		const readable = new ReadableStream({
@@ -300,12 +300,12 @@ export async function httpsConnect(
 					}
 					try {
 						controller.close();
-					} catch (e) {}
+					} catch {}
 					settleClosed(resolveClosed);
 				} catch (error) {
 					try {
 						controller.error(error);
-					} catch (e) {}
+					} catch {}
 					settleClosed(rejectClosed, error);
 				}
 			},
@@ -327,7 +327,7 @@ export async function httpsConnect(
 	} catch (error) {
 		try {
 			tlsSocket?.close();
-		} catch (e) {}
+		} catch {}
 		throw error;
 	}
 }

@@ -13,8 +13,8 @@ import {
 	uplinkQueueMaxEntries,
 } from '../constants.js';
 import { closeSocketQuietly, webSocketSendAndAwait } from './tcp.js';
-import { getValidDataLength } from '../handlers/xhttp.js';
-import { log, toUint8Array } from '../utils/helpers.js';
+import { getValidDataLength, log, toUint8Array } from '../utils/helpers.js';
+
 
 export function createGrainBundler(capacity, copyBundleResult = false) {
 	let queue = [];
@@ -181,7 +181,7 @@ export function createUplinkGrainBundleStream(targetBytes = uplinkBundleTargetBy
 			} finally {
 				try {
 					writer.releaseLock();
-				} catch (e) {}
+				} catch {}
 			}
 		},
 	};
@@ -240,7 +240,7 @@ export function createUplinkWriteQueue({
 	};
 
 	const waitForAvailableWriter = async () => {
-		let writer = getWriter();
+		const writer = getWriter();
 		if (writer) return writer;
 		const connectionTask = getConnectionTask?.();
 		if (connectionTask) await connectionTask;
@@ -287,7 +287,7 @@ export function createUplinkWriteQueue({
 			log(`[${name}] write failed: ${err?.message || err}`);
 			try {
 				closeConnection?.(err);
-			} catch (_) {}
+			} catch {}
 		} finally {
 			draining = false;
 			if (!closed && !grain.isEmpty) drain();
@@ -314,7 +314,7 @@ export function createUplinkWriteQueue({
 			log(`[${name}] queue exceeded，closeConnection`);
 			try {
 				closeConnection?.(err);
-			} catch (_) {}
+			} catch {}
 			throw err;
 		}
 		let completionPromise = null;
@@ -593,12 +593,12 @@ export async function connectStreams(
 	if (remoteConnWrapper) remoteConnWrapper.downlinkController = downlinkController;
 	try {
 		remoteSocket.closed?.catch?.(() => {});
-	} catch (e) {}
+	} catch {}
 
 	try {
 		reader = remoteSocket.readable.getReader({ mode: 'byob' });
 		useBYOB = true;
-	} catch (e) {
+	} catch {
 		reader = remoteSocket.readable.getReader();
 	}
 
@@ -655,13 +655,13 @@ export async function connectStreams(
 			remoteConnWrapper.downlinkController = null;
 		try {
 			await reader.cancel();
-		} catch (e) {}
+		} catch {}
 		try {
 			reader.releaseLock();
-		} catch (e) {}
+		} catch {}
 		try {
 			remoteSocket.close();
-		} catch (e) {}
+		} catch {}
 	}
 	if (
 		!hasData &&

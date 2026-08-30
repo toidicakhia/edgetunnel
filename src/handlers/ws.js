@@ -25,28 +25,19 @@ import {
 	vlessTextDecoder,
 } from '../core/protocol.js';
 import { buildWSLocal204Response, createUplinkWriteQueue, isSpeedTestSite } from '../core/grain.js';
-import { closeSocketQuietly, forwardTCP, forwardUDP, webSocketSendAndAwait } from '../core/tcp.js';
-import { concatByteData, log, toUint8Array } from '../utils/helpers.js';
-import { getValidDataLength, invalidateTCPConnectorGeneration } from './xhttp.js';
+import { closeSocketQuietly, forwardTCP, forwardUDP, invalidateTCPConnectorGeneration, webSocketSendAndAwait } from '../core/tcp.js';
+import { concatByteData, getValidDataLength, log, toUint8Array } from '../utils/helpers.js';
 import { sha224 } from '../utils/crypto.js';
-import { parseVMessRequest, vmessCreateResponseHeader } from '../core/vmess.js';
+import { parseVMessRequest } from '../core/vmess.js';
+
 
 export function isValidWSEarlyData(bytes, token) {
 	if (!bytes?.byteLength) return false;
 	if (bytes.byteLength >= 18 && uuidBytesMatch(bytes, 1, token)) return true;
 	if (bytes.byteLength >= 50) {
-		// VMess AEAD header is at least 16 (AuthID) + 18 (len) + 8 (nonce) + 38 (inner) + 16 (tag) = 96
-		// For early data, we just check if it could be VMess by length and not matching VLESS/Trojan patterns
-		// A more accurate check would be async VMess AuthID decrypt, but for sync early data check we treat any
-		// sufficiently large non-VLESS/Trojan as potentially VMess to allow the async handler to try VMess first.
-		// This prevents WS early data from being rejected for VMess.
-		// We consider 50+ bytes as potential VMess if it doesn't look like Trojan
 		if (bytes.byteLength >= 58 && bytes[56] === 0x0d && bytes[57] === 0x0a) {
-			// Trojan check already done, but if it matches Trojan we return true (handled above)
+			// Trojan check handled below
 		} else {
-			// Could be VMess - allow it as valid early data so the WS handler will try VMess parsing
-			// We return true here to let the async path handle it; the actual VMess validation is async.
-			// For sync, we optimistically return true for any 50+ byte packet that is not VLESS
 			return true;
 		}
 	}
@@ -68,7 +59,7 @@ export function decodeWSEarlyData(header, token) {
 	if (typeof Uint8ArrayBase64.fromBase64 === 'function') {
 		try {
 			bytes = Uint8ArrayBase64.fromBase64(header, { alphabet: 'base64url' });
-		} catch (_) {}
+		} catch {}
 	}
 	if (!bytes) {
 		let normalized = header.replace(/-/g, '+').replace(/_/g, '/');
@@ -77,9 +68,8 @@ export function decodeWSEarlyData(header, token) {
 		let binaryString;
 		try {
 			binaryString = atob(normalized);
-		} catch (_) {
-			return null;
-		}
+		} catch {}
+		if (!binaryString) return null;
 		bytes = new Uint8Array(binaryString.length);
 		for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
 	}
@@ -95,11 +85,9 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 	const [clientSock, serverSock] = Object.values(wsSocketPair);
 	try {
 		/** @type {any} */ (serverSock).accept({ allowHalfOpen: true });
-	} catch (_) {
-		serverSock.accept();
-	}
+	} catch {}
 	serverSock.binaryType = 'arraybuffer';
-	let remoteConnWrapper = {
+	const remoteConnWrapper = {
 		socket: null,
 		connectingPromise: null,
 		retryConnect: null,
@@ -114,7 +102,6 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 	};
 	const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
 	const ssModeDisableEarlyData = !!url.searchParams.get('enc');
-	let wsUplinkWriteQueue = null;
 	let wsExplicitTransferChain = Promise.resolve();
 	let wsExplicitTransferStopReceiving = false,
 		wsExplicitTransferFailed = false,
@@ -133,6 +120,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 	let wsLocalSpeedTestRequestCache = new Uint8Array(0);
 	let wsLocalSpeedTestFirstPacketResponseHeader = null;
 	const wsLocalSpeedTestRequestLimit = 64 * 1024;
+
 
 	const sendWSLocalSpeedTestResponse = async () => {
 		if (!wsLocalSpeedTestResponseSocket) return;
@@ -204,13 +192,13 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 		if (remoteWriter) {
 			try {
 				remoteWriter.releaseLock();
-			} catch (e) {}
+			} catch {}
 			remoteWriter = null;
 		}
 		currentWriteSocket = null;
 	};
 
-	const uplinkWriteQueue = (wsUplinkWriteQueue = createUplinkWriteQueue({
+	const uplinkWriteQueue = createUplinkWriteQueue({
 		getWriter: () => {
 			const socket = remoteConnWrapper.socket;
 			if (!socket) return null;
@@ -230,7 +218,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 		},
 		closeConnection: (err) => handleWSExplicitTransferError(err),
 		name: 'WSuplink',
-	}));
+	});
 
 	const writeToRemote = async (chunk, allowRetry = true) => {
 		return uplinkWriteQueue.write(chunk, allowRetry);
@@ -330,7 +318,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 								inboundState.cipherConfig = cipherConfig;
 								inboundState.hasSalt = true;
 								return true;
-							} catch (_) {}
+							} catch {}
 						}
 					}
 					const initFailureThresholdLength =
@@ -708,7 +696,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			ctx.responseSocket = vmessResponseSocket;
 
 			// Handle first body data if present
-			let firstBody = parsed.rawClientData;
+			const firstBody = parsed.rawClientData;
 			if (firstBody && firstBody.byteLength) {
 				// If security is not none, the first body is still encrypted as part of VMess body chunks
 				// We need to handle VMess body chunk framing: 2-byte length + encrypted payload
@@ -743,10 +731,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 								ctx.security === 'auto' ? 'aes-128-gcm' : ctx.security
 							);
 							ctx.count++;
-						} catch (e) {
-							// If decrypt fails, treat as raw
-							decrypted = chunkData;
-						}
+						} catch {}
 						if (decrypted && decrypted.byteLength) {
 							await forwardTCP(
 								ctx.targetHost,
@@ -836,7 +821,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 					ctx.security === 'auto' ? 'aes-128-gcm' : ctx.security
 				);
 				ctx.count++;
-			} catch (e) {
+			} catch {
 				// If decrypt fails, try raw
 				decrypted = chunkData;
 			}
@@ -896,8 +881,8 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 							determineProtocolType = 'vmess';
 							isVMess = true;
 						}
-					} catch (e) {
-						/* not vmess */
+					} catch {
+						// not vmess
 					}
 				}
 				if (!isVMess) {
@@ -1019,7 +1004,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 		invalidateRemote();
 		try {
 			trojanUDPContext.proxySocket?.close();
-		} catch (e) {}
+		} catch {}
 		closeSocketQuietly(serverSock);
 	};
 
@@ -1062,7 +1047,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			invalidateRemote();
 			try {
 				trojanUDPContext.proxySocket?.close();
-			} catch (e) {}
+			} catch {}
 		});
 	};
 

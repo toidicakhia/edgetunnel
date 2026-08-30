@@ -3,8 +3,6 @@
  * Auto-generated from _worker.js refactor
  * Original: edgetunnel 2.1 (2026-08-11)
  */
-import { turnConnect } from '../core/turn.js';
-
 export function stripIPv6Brackets(hostname = '') {
 	const host = String(hostname || '').trim();
 	return host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
@@ -18,7 +16,7 @@ export function isIPHostname(hostname = '') {
 	try {
 		new URL(`http://[${host}]/`);
 		return true;
-	} catch (e) {
+	} catch {
 		return false;
 	}
 }

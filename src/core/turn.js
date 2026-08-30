@@ -4,10 +4,9 @@
  * Original: edgetunnel 2.1 (2026-08-11)
  */
 import { CONNECT_TIMEOUT_MS, doHQuery } from '../utils/doh.js';
-import { concatByteData, toUint8Array } from '../utils/helpers.js';
-import { getValidDataLength } from '../handlers/xhttp.js';
+import { concatByteData, getValidDataLength, toUint8Array } from '../utils/helpers.js';
 import { isIPv4, stripIPv6Brackets, withTimeout } from '../utils/network.js';
-import { sstpConnect } from './sstp.js';
+
 import { textDecoder, textEncoder } from './tls.js';
 
 export const TURN_STUN_MAGIC_COOKIE = new Uint8Array([0x21, 0x12, 0xa4, 0x42]);
@@ -157,17 +156,17 @@ export async function turnConnect(proxy, targetHost, targetPort, tcpConnector) {
 	const close = () => {
 		try {
 			controlSocket?.close?.();
-		} catch (e) {}
+		} catch {}
 		try {
 			dataSocket?.close?.();
-		} catch (e) {}
+		} catch {}
 	};
 	const releaseDataReader = () => {
 		if (dataReaderReleased) return;
 		dataReaderReleased = true;
 		try {
 			dataReader?.releaseLock?.();
-		} catch (e) {}
+		} catch {}
 	};
 
 	try {
@@ -385,7 +384,7 @@ export async function turnConnect(proxy, targetHost, targetPort, tcpConnector) {
 			cancel() {
 				try {
 					dataReader?.cancel?.();
-				} catch (e) {}
+				} catch {}
 				releaseDataReader();
 				close();
 			},
@@ -395,13 +394,13 @@ export async function turnConnect(proxy, targetHost, targetPort, tcpConnector) {
 	} catch (error) {
 		try {
 			controlWriter?.releaseLock?.();
-		} catch (e) {}
+		} catch {}
 		try {
 			controlReader?.releaseLock?.();
-		} catch (e) {}
+		} catch {}
 		try {
 			dataWriter?.releaseLock?.();
-		} catch (e) {}
+		} catch {}
 		releaseDataReader();
 		close();
 		throw error;

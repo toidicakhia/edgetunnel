@@ -301,12 +301,13 @@ export function randomPath(fullNodePath = '/') {
 		'zip',
 	];
 	const randomCount = Math.floor(Math.random() * 3 + 1);
-	const randomPath = commonPathDirs
+	const randomSegment = commonPathDirs
 		.sort(() => 0.5 - Math.random())
 		.slice(0, randomCount)
 		.join('/');
-	if (fullNodePath === '/') return `/${randomPath}`;
-	else return `/${randomPath + fullNodePath.replace('/?', '?')}`;
+	const pathStr = typeof fullNodePath === 'string' ? fullNodePath : '/';
+	if (pathStr === '/') return `/${randomSegment}`;
+	return `/${randomSegment + pathStr.replace('/?', '?')}`;
 }
 
 export function replaceWildcardWithRandomChars(content) {
@@ -320,11 +321,23 @@ export function replaceWildcardWithRandomChars(content) {
 	});
 }
 
-export async function parseToArray(content) {
-	var cleanedContent = content.replace(/[	"'\r\n]+/g, ',').replace(/,+/g, ',');
-	if (cleanedContent.charAt(0) == ',') cleanedContent = cleanedContent.slice(1);
-	if (cleanedContent.charAt(cleanedContent.length - 1) == ',')
-		cleanedContent = cleanedContent.slice(0, cleanedContent.length - 1);
-	const addressArray = cleanedContent.split(',');
-	return addressArray;
+export function getValidDataLength(data) {
+	if (!data) return 0;
+	if (data instanceof Uint8Array || data instanceof ArrayBuffer) return data.byteLength;
+	if (ArrayBuffer.isView(data)) return data.byteLength;
+	if (typeof data.length === 'number') return data.length;
+	return 0;
 }
+
+export async function parseToArray(content) {
+	if (!content) return [];
+	if (Array.isArray(content)) return content.map((item) => String(item).trim()).filter(Boolean);
+	if (typeof content !== 'string') return [];
+	const cleanedContent = content.replace(/[	"'\r\n]+/g, ',').replace(/,+/g, ',');
+	return cleanedContent
+		.split(',')
+		.map((s) => s.trim())
+		.filter(Boolean);
+}
+
+

@@ -61,19 +61,19 @@ export async function sstpConnect(proxy, targetHost, targetPort, tcpConnector) {
 	const close = () => {
 		try {
 			reader?.cancel?.().catch?.(() => {});
-		} catch (e) {}
+		} catch {}
 		try {
 			reader?.releaseLock?.();
-		} catch (e) {}
+		} catch {}
 		try {
 			writer?.close?.().catch?.(() => {});
-		} catch (e) {}
+		} catch {}
 		try {
 			writer?.releaseLock?.();
-		} catch (e) {}
+		} catch {}
 		try {
 			socket?.close?.();
-		} catch (e) {}
+		} catch {}
 		settleClosed(resolveClosed);
 	};
 
@@ -538,7 +538,7 @@ export async function sstpConnect(proxy, targetHost, targetPort, tcpConnector) {
 						if (controller) {
 							try {
 								controller.close();
-							} catch (e) {}
+							} catch {}
 						}
 						close();
 						return;
@@ -551,12 +551,12 @@ export async function sstpConnect(proxy, targetHost, targetPort, tcpConnector) {
 				if (controller) {
 					try {
 						controller.error(error);
-					} catch (e) {}
+					} catch {}
 				}
 				settleClosed(rejectClosed, error);
 				try {
 					socket?.close?.();
-				} catch (e) {}
+				} catch {}
 			}
 		})();
 

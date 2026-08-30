@@ -541,7 +541,7 @@ export default {
 								} finally {
 									try {
 										tlsSocket ? tlsSocket.close() : await tcpSocket?.close?.();
-									} catch (e) {}
+									} catch {}
 								}
 							} catch (error) {
 								checkProxyResponse = {
@@ -1051,7 +1051,7 @@ export default {
 								fullOptimalIPs = [...new Set(optimalIP.concat(optimalAPIIPs))];
 							} else {
 								// optimalSubscriptionGenerator
-								let optSubGeneratorHOST =
+								const optSubGeneratorHOST =
 									url.searchParams.get('sub') || config_JSON.optSubGenerator.SUB;
 								const [optGeneratorIPArray, optGeneratorOtherNodes] =
 									await fetchOptimalSubGeneratorData(optSubGeneratorHOST);
@@ -1324,7 +1324,7 @@ export default {
 											// Also handle ps if needed? No, ps is remark
 											// Re-encode
 											return 'vmess://' + btoa(JSON.stringify(vmess));
-										} catch (e) {
+										} catch {
 											return line;
 										}
 									})
@@ -1399,7 +1399,7 @@ export default {
 			try {
 				const u = new URL(camouflagePageURL);
 				camouflagePageURL = u.protocol + '//' + u.host;
-			} catch (e) {
+			} catch {
 				camouflagePageURL = 'nginx';
 			}
 		}
@@ -1438,7 +1438,7 @@ export default {
 				});
 			}
 			return proxyResponse;
-		} catch (error) {}
+		} catch {}
 		return new Response(await nginx(), {
 			status: 200,
 			headers: { 'Content-Type': 'text/html; charset=UTF-8' },

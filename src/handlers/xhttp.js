@@ -1,16 +1,11 @@
-/**
- * src/handlers/xhttp.js
- * Auto-generated from _worker.js refactor
- * Original: edgetunnel 2.1 (2026-08-11)
- */
 import {
 	buildLocal204Response,
 	createUplinkGrainBundleStream,
 	isSpeedTestSite,
 } from '../core/grain.js';
-import { closeSocketQuietly, forwardTCP, forwardUDP } from '../core/tcp.js';
+import { closeSocketQuietly, forwardTCP, forwardUDP, invalidateTCPConnectorGeneration } from '../core/tcp.js';
 import { forwardTrojanUDPData, uuidBytesMatch, vlessTextDecoder } from '../core/protocol.js';
-import { concatByteData, log, toUint8Array } from '../utils/helpers.js';
+import { concatByteData, getValidDataLength, log } from '../utils/helpers.js';
 import { sha224 } from '../utils/crypto.js';
 import { parseVMessRequest } from '../core/vmess.js';
 
@@ -47,7 +42,7 @@ export function extractXHTTPPaddingValue(request, localPaddingHeader, localPaddi
 			const parsedURL = new URL(headerValue, 'https://x.invalid');
 			const queryValue = parsedURL.searchParams.get(localPaddingKey);
 			if (queryValue) return queryValue;
-		} catch (e) {}
+		} catch {}
 		return headerValue;
 	}
 	const requestURL = new URL(request.url);
@@ -82,13 +77,13 @@ export async function handleXHTTPRequest(request, yourUUID, proxyContext = {}) {
 	if (!firstPacket) {
 		try {
 			reader.releaseLock();
-		} catch (e) {}
+		} catch {}
 		return new Response('Invalid request', { status: 400 });
 	}
 	if (isSpeedTestSite(firstPacket.hostname) && proxyContext.proxyType === null) {
 		try {
 			reader.releaseLock();
-		} catch (e) {}
+		} catch {}
 		return new Response(buildLocal204Response(firstPacket.respHeader), {
 			status: 200,
 			headers: {
@@ -101,7 +96,7 @@ export async function handleXHTTPRequest(request, yourUUID, proxyContext = {}) {
 	if (firstPacket.isUDP && firstPacket.protocol !== 'trojan' && firstPacket.port !== 53) {
 		try {
 			reader.releaseLock();
-		} catch (e) {}
+		} catch {}
 		return new Response('UDP is not supported', { status: 400 });
 	}
 
@@ -118,7 +113,7 @@ export async function handleXHTTPRequest(request, yourUUID, proxyContext = {}) {
 			generateXHTTPPaddingString(100 + Math.floor(Math.random() * 901))
 		);
 		responseHeaders.set(localPaddingHeader, responseURL.toString());
-	} catch (e) {}
+	} catch {}
 
 	if (firstPacket.isUDP)
 		return handleXHTTPUDPRequest(firstPacket, reader, request, proxyContext, responseHeaders);
@@ -128,20 +123,18 @@ export async function handleXHTTPRequest(request, yourUUID, proxyContext = {}) {
 	let vmessBodyKey = null;
 	let vmessBodyIV = null;
 	let vmessSecurity = null;
-	let vmessResponseHeader = 0;
 	let vmessFirstBodyDecrypted = null;
 	if (firstPacket.protocol === 'vmess' && firstPacket.vmessInfo) {
 		vmessXHTTPInfo = firstPacket.vmessInfo;
 		vmessBodyKey = vmessXHTTPInfo.bodyKey;
 		vmessBodyIV = vmessXHTTPInfo.bodyIV;
 		vmessSecurity = vmessXHTTPInfo.security;
-		vmessResponseHeader = vmessXHTTPInfo.responseHeader;
 		// Try to decrypt first body if present and security is not none
 		if (firstPacket.rawData && firstPacket.rawData.byteLength && vmessSecurity !== 'none') {
 			try {
 				const { vmessDecryptChunk } = await import('../core/vmess.js');
 				// VMess body is length-prefixed chunks
-				let buf = firstPacket.rawData;
+				const buf = firstPacket.rawData;
 				let offset = 0;
 				let decryptedFirst = new Uint8Array(0);
 				let count = 0;
@@ -167,7 +160,7 @@ export async function handleXHTTPRequest(request, yourUUID, proxyContext = {}) {
 					: new Uint8Array(0);
 				// If we decrypted something, use it as rawData, otherwise fallback to original
 				if (vmessFirstBodyDecrypted.length) firstPacket.rawData = vmessFirstBodyDecrypted;
-			} catch (e) {
+			} catch {
 				// Fallback to raw
 			}
 		} else if (vmessSecurity === 'none' && firstPacket.rawData) {
@@ -177,7 +170,7 @@ export async function handleXHTTPRequest(request, yourUUID, proxyContext = {}) {
 
 	try {
 		reader.releaseLock();
-	} catch (e) {}
+	} catch {}
 
 	const remoteConnWrapper = {
 		socket: null,
@@ -192,9 +185,10 @@ export async function handleXHTTPRequest(request, yourUUID, proxyContext = {}) {
 		isCleaned = true;
 		try {
 			abortController.abort(reason);
-		} catch (e) {}
+		} catch {}
 		invalidateTCPConnectorGeneration(remoteConnWrapper);
 	};
+
 
 	const placeholderWS = { readyState: WebSocket.OPEN };
 
@@ -234,7 +228,7 @@ export async function handleXHTTPRequest(request, yourUUID, proxyContext = {}) {
 		const cancelUplinkReader = () => {
 			try {
 				uplinkReader.cancel(abortController.signal.reason).catch(() => {});
-			} catch (e) {}
+			} catch {}
 		};
 		abortController.signal.addEventListener('abort', cancelUplinkReader, { once: true });
 		try {
@@ -248,12 +242,12 @@ export async function handleXHTTPRequest(request, yourUUID, proxyContext = {}) {
 				abortController.signal.removeEventListener('abort', cancelUplinkReader);
 				try {
 					uplinkReader.releaseLock();
-				} catch (e) {}
+				} catch {}
 			}
 		} finally {
 			try {
 				await uplinkBundler.end();
-			} catch (e) {}
+			} catch {}
 		}
 		await pipePromise;
 	})();
@@ -270,12 +264,12 @@ export async function handleXHTTPRequest(request, yourUUID, proxyContext = {}) {
 		} catch (error) {
 			try {
 				await writer.abort(error);
-			} catch (e) {}
+			} catch {}
 			throw error;
 		} finally {
 			try {
 				writer.releaseLock();
-			} catch (e) {}
+			} catch {}
 		}
 		await socket.readable.pipeTo(responseStream.writable, { signal: abortController.signal });
 	})();
@@ -315,7 +309,7 @@ export function handleXHTTPUDPRequest(firstPacket, reader, request, proxyContext
 												)
 											: new Uint8Array(data);
 							controller.enqueue(chunk);
-						} catch (e) {
+						} catch {
 							isClosed = true;
 							this.readyState = WebSocket.CLOSED;
 						}
@@ -326,7 +320,7 @@ export function handleXHTTPUDPRequest(firstPacket, reader, request, proxyContext
 						this.readyState = WebSocket.CLOSED;
 						try {
 							controller.close();
-						} catch (e) {}
+						} catch {}
 					},
 				};
 				let forwardFailed = false;
@@ -389,69 +383,25 @@ export function handleXHTTPUDPRequest(firstPacket, reader, request, proxyContext
 					if (!keepTrojanUDPProxyDown) {
 						try {
 							trojanUDPContext.proxySocket?.close();
-						} catch (e) {}
+						} catch {}
 						closeSocketQuietly(httpBridge);
 					}
 					try {
 						reader.releaseLock();
-					} catch (e) {}
+					} catch {}
 				}
 			},
 			cancel() {
 				try {
 					trojanUDPContext.proxySocket?.close();
-				} catch (e) {}
+				} catch {}
 				try {
 					reader.releaseLock();
-				} catch (e) {}
+				} catch {}
 			},
 		}),
 		{ status: 200, headers: responseHeaders }
 	);
-}
-
-export function getValidDataLength(data) {
-	if (!data) return 0;
-	if (typeof data.byteLength === 'number') return data.byteLength;
-	if (typeof data.length === 'number') return data.length;
-	return 0;
-}
-
-export function invalidateTCPConnectorGeneration(remoteConnWrapper) {
-	if (!remoteConnWrapper) return;
-	remoteConnWrapper.generation =
-		(Number.isInteger(remoteConnWrapper.generation) ? remoteConnWrapper.generation : 0) + 1;
-	const socket = remoteConnWrapper.socket;
-	remoteConnWrapper.socket = null;
-	remoteConnWrapper.downlinkController = null;
-	remoteConnWrapper.downlinkDrain = Promise.resolve();
-	try {
-		socket?.close?.();
-	} catch (e) {}
-}
-
-export function startTCPConnectorGeneration(remoteConnWrapper) {
-	if (!Number.isInteger(remoteConnWrapper.generation)) remoteConnWrapper.generation = 0;
-	const generation = ++remoteConnWrapper.generation;
-	const previousSocket = remoteConnWrapper.socket;
-	remoteConnWrapper.socket = null;
-	const previousDownlink = remoteConnWrapper.downlinkController;
-	remoteConnWrapper.downlinkController = null;
-	const previousDrain = remoteConnWrapper.downlinkDrain || Promise.resolve();
-	let currentDrain;
-	try {
-		currentDrain = previousDownlink?.stopAndFlush?.() || Promise.resolve();
-	} catch (error) {
-		currentDrain = Promise.reject(error);
-	}
-	const downlinkDrain = Promise.all([previousDrain, currentDrain]);
-	// Installation awaits this promise; attach a handler immediately in case draining fails before dialing completes.
-	downlinkDrain.catch(() => {});
-	remoteConnWrapper.downlinkDrain = downlinkDrain;
-	try {
-		previousSocket?.close?.();
-	} catch (e) {}
-	return { generation, downlinkDrain };
 }
 
 export async function readXHTTPFirstPacket(reader, token) {
@@ -595,7 +545,7 @@ export async function readXHTTPFirstPacket(reader, token) {
 					},
 				};
 			}
-		} catch (e) {}
+		} catch {}
 		return { status: 'invalid' };
 	};
 

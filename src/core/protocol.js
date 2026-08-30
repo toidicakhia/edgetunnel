@@ -4,12 +4,12 @@
  * Original: edgetunnel 2.1 (2026-08-11)
  */
 import { closeSocketQuietly, forwardUDP } from './tcp.js';
-import { concatByteData, toUint8Array } from '../utils/helpers.js';
+import { concatByteData, getValidDataLength, toUint8Array } from '../utils/helpers.js';
 import { connectStreams } from './grain.js';
 import { createRequestTCPConnector } from './proxy.js';
-import { getValidDataLength } from '../handlers/xhttp.js';
-import { sha224 } from '../utils/crypto.js';
+import { pureMD5Bytes, sha224 } from '../utils/crypto.js';
 import { stripIPv6Brackets } from '../utils/network.js';
+
 
 export const trojanTextDecoder = new TextDecoder();
 
@@ -53,12 +53,12 @@ export async function connectTrojanProxy(firstPacketdata, tcpConnector, trojanPr
 	} catch (error) {
 		try {
 			socket?.close?.();
-		} catch (e) {}
+		} catch {}
 		throw error;
 	} finally {
 		try {
 			writer?.releaseLock();
-		} catch (e) {}
+		} catch {}
 	}
 }
 
@@ -91,7 +91,7 @@ export async function forwardTrojanUDPProxyData(chunk, webSocket, context, reque
 	} finally {
 		try {
 			writer.releaseLock();
-		} catch (e) {}
+		} catch {}
 	}
 }
 
@@ -99,7 +99,7 @@ export function parseTrojanRequest(buffer, passwordPlainText) {
 	const data = toUint8Array(buffer);
 	const sha224Password = sha224(passwordPlainText);
 	if (data.byteLength < 58) return { hasError: true, message: 'invalid data' };
-	let crLfIndex = 56;
+	const crLfIndex = 56;
 	if (data[crLfIndex] !== 0x0d || data[crLfIndex + 1] !== 0x0a)
 		return { hasError: true, message: 'invalid header format' };
 	for (let i = 0; i < crLfIndex; i++) {
@@ -187,7 +187,7 @@ export function readHexNibble(code) {
 
 export function getUUIDBytes(uuid) {
 	const key = String(uuid || '');
-	let cached = uuidBytesCache.get(key);
+	const cached = uuidBytesCache.get(key);
 	if (cached) return cached;
 
 	const clean = key.replace(/-/g, '');
@@ -322,7 +322,7 @@ export async function forwardTrojanUDPData(chunk, webSocket, context, request) {
 	while (cursor < input.byteLength) {
 		const packetStart = cursor;
 		const atype = input[cursor];
-		let addrCursor = cursor + 1;
+		const addrCursor = cursor + 1;
 		let addrLen = 0;
 		if (atype === 1) addrLen = 4;
 		else if (atype === 4) addrLen = 16;
@@ -411,7 +411,7 @@ export async function SSDeriveMasterKey(passwordText, keyLen) {
 			const input = new Uint8Array(prev.byteLength + pwBytes.byteLength);
 			input.set(prev, 0);
 			input.set(pwBytes, prev.byteLength);
-			prev = new Uint8Array(await crypto.subtle.digest('MD5', input));
+			prev = pureMD5Bytes(input);
 			result = concatByteData(result, prev);
 		}
 		return result.slice(0, keyLen);

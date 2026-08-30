@@ -6,6 +6,9 @@
  */
 
 import { concatByteData, toUint8Array } from '../utils/helpers.js';
+import { getUUIDBytes } from './protocol.js';
+import { pureMD5Bytes } from '../utils/crypto.js';
+
 
 // -----------------------------------------------------------------------------
 // Constants
@@ -28,11 +31,7 @@ const CMD_KEY_SALT = 'c48619fe-8f02-49e0-b9e9-edf763e17e21';
 // -----------------------------------------------------------------------------
 
 async function md5(data) {
-	const buf = data instanceof Uint8Array ? data : new TextEncoder().encode(String(data));
-	// Cloudflare Workers supports MD5 via subtle.digest
-	// Fallback to pure JS if not available is not needed here; we assume Workers supports it.
-	const out = await crypto.subtle.digest('MD5', buf);
-	return new Uint8Array(out);
+	return pureMD5Bytes(data);
 }
 
 async function sha256(data) {
@@ -56,7 +55,7 @@ async function hmacSHA256(keyBytes, dataBytes) {
 // KDF as per Xray-core proxy/vmess/aead/kdf.go
 // Nested HMAC construction.
 export async function vmessKDF(keyBytes, ...paths) {
-	let currentKey = new TextEncoder().encode(KDFSaltConstVMessAEADKDF);
+	const currentKey = new TextEncoder().encode(KDFSaltConstVMessAEADKDF);
 
 	function toBytes(p) {
 		if (p instanceof Uint8Array) return p;
@@ -92,27 +91,6 @@ export async function getCmdKey(uuidStr) {
 	return md5(combined);
 }
 
-// UUID helpers (duplicated from protocol.js to avoid circular deps)
-function readHexNibble(code) {
-	if (code >= 48 && code <= 57) return code - 48;
-	code |= 32;
-	if (code >= 97 && code <= 102) return code - 87;
-	return -1;
-}
-
-function getUUIDBytes(uuid) {
-	const key = String(uuid || '');
-	const clean = key.replace(/-/g, '');
-	if (clean.length !== 32) return null;
-	const bytes = new Uint8Array(16);
-	for (let i = 0; i < 16; i++) {
-		const high = readHexNibble(clean.charCodeAt(i * 2));
-		const low = readHexNibble(clean.charCodeAt(i * 2 + 1));
-		if (high < 0 || low < 0) return null;
-		bytes[i] = (high << 4) | low;
-	}
-	return bytes;
-}
 
 // CRC32 (IEEE)
 const crc32Table = (() => {
@@ -174,57 +152,7 @@ async function aesGcmDecrypt(keyBytes, nonce12, ciphertext, ad) {
 	return new Uint8Array(pt);
 }
 
-// AES-128 ECB via AES-CBC with zero IV for single block (16 bytes)
-// For AuthID, plaintext is 16 bytes, key 16 bytes, ECB is single block encrypt
-async function aesEcbEncryptBlock(key16, plaintext16) {
-	// Use AES-CBC with zero IV, no padding, for one block ECB == CBC with zero IV
-	const key = await crypto.subtle.importKey('raw', key16, { name: 'AES-CBC' }, false, [
-		'encrypt',
-	]);
-	const iv = new Uint8Array(16);
-	const ct = await crypto.subtle.encrypt({ name: 'AES-CBC', iv }, key, plaintext16);
-	// AES-CBC will produce 32 bytes due to PKCS7 padding (adds a full block). We need only first 16 bytes for ECB single block without padding.
-	// Instead, we can use a pure JS AES-ECB for one block to avoid padding issues.
-	// For now, we slice to 16 bytes (the first block is the ECB result, second block is padding block)
-	// But to be safe, we should use a pure JS implementation or handle padding.
-	// Simple: Use AES-GCM? No.
-	// We can use a JS AES library. For now, we implement a minimal AES-ECB using WebCrypto trick:
-	// Encrypt 32 bytes (16 plaintext + 16 zero padding) and take first 16 bytes? Actually PKCS7 will pad 16 bytes of 0x10.
-	// So first 16 bytes is the ECB of the original block.
-	return new Uint8Array(ct).slice(0, 16);
-}
-
-async function aesEcbDecryptBlock(key16, ciphertext16) {
-	const key = await crypto.subtle.importKey('raw', key16, { name: 'AES-CBC' }, false, [
-		'decrypt',
-	]);
-	const iv = new Uint8Array(16);
-	// For decrypt, we need 32 bytes (ciphertext + padding block) to get correct PKCS7 handling, but we only have 16.
-	// Instead, we can encrypt 16 bytes of zeros and use that? This is getting messy.
-	// For Workers, we can try to use AES-CBC with no padding by using a different approach:
-	// We will try to decrypt with AES-CBC and then manually handle.
-	// Simpler: Use pure JS AES for single block. Let's implement a tiny AES-ECB decrypt via WebCrypto by using AES-GCM? Not.
-	// As fallback, we implement pure JS AES ECB decrypt using a known implementation.
-	// For now, we try the CBC trick and slice.
-	const paddedCipher = new Uint8Array(32);
-	paddedCipher.set(ciphertext16, 0);
-	// Second block is the encryption of padding (16 bytes of 0x10) - we need to generate it
-	// Instead, we can just try to decrypt the 16-byte block with CBC and ignore PKCS7 errors by using a different method.
-	// We will attempt to use crypto.subtle.decrypt with AES-CBC and expect it to handle PKCS7 - but with 16 bytes, it will try to unpad and fail if not valid padding.
-	// So we need a pure JS AES.
-	// We will fall back to pure JS implementation below.
-	try {
-		const pt = await crypto.subtle.decrypt({ name: 'AES-CBC', iv }, key, ciphertext16);
-		return new Uint8Array(pt).slice(0, 16);
-	} catch (e) {
-		// Fallback to pure JS
-		return aesEcbDecryptPureJS(key16, ciphertext16);
-	}
-}
-
-// Pure JS AES-128 ECB single block (tiny implementation, adapted from https://github.com/mervick/aes-js or similar)
-// For brevity, we include a minimal AES-128 ECB encrypt/decrypt for one block.
-// This is a simplified version; for production use, replace with a audited library.
+// Pure JS AES-128 ECB single block
 let aesSBox, aesInvSBox, aesRcon;
 function initAESSBox() {
 	if (aesSBox) return;
@@ -357,18 +285,6 @@ function aesInvMixColumns(state) {
 			a1 = state[i + 1],
 			a2 = state[i + 2],
 			a3 = state[i + 3];
-		const e = (a) => {
-			let t = a;
-			t = xtime(t);
-			let u = xtime(t);
-			return a ^ u ^ xtime(u) ^ xtime(a ^ u);
-		};
-		// Use generic inv mix - for brevity we use lookup via forward mix inverse with precomputed tables would be needed.
-		// For single-block AEAD we can skip invMixColumns for the last round; for full decrypt we need it.
-		// Simplified: use the same mix but with different constants for decrypt - we use a minimal implementation that works for our test vector by using the forward mix inverse via repeated xtime.
-		// This is a simplified placeholder - in production, use a full AES impl.
-		// For now, we will just call the forward mix for decrypt as well, which will still allow header decrypt to succeed for many clients due to deterministic nature?
-		// Instead, we will implement a correct invMixColumns via table.
 		const b0 = 0x0e,
 			b1 = 0x09,
 			b2 = 0x0d,
@@ -466,7 +382,7 @@ export async function decodeAuthID(authID16, cmdKey) {
 	const first12 = decrypted.slice(0, 12);
 	const calcCrc = crc32(first12);
 	if (calcCrc !== crc) return null;
-	return { timeSec, rand, crc, raw: decrypted };
+	return { timeSec, timestamp: timeSec, rand, crc, raw: decrypted };
 }
 
 // Open VMess AEAD header (outer)
@@ -508,7 +424,7 @@ export async function openVMessAEADHeader(cmdKey, authID, readerOrBytes) {
 					const lenPt = await aesGcmDecrypt(lenKey, lenNonce, lenCt, authID);
 					const len = (lenPt[0] << 8) | lenPt[1];
 					if (buf.length >= 18 + 8 + len + 16) break;
-				} catch (e) {
+				} catch {
 					/* not enough */
 				}
 			}
@@ -535,7 +451,7 @@ export async function openVMessAEADHeader(cmdKey, authID, readerOrBytes) {
 	let lenPt;
 	try {
 		lenPt = await aesGcmDecrypt(lenKey, lenNonce, encryptedLen, authID);
-	} catch (e) {
+	} catch {
 		return null;
 	}
 	const headerLen = (lenPt[0] << 8) | lenPt[1];
@@ -554,7 +470,7 @@ export async function openVMessAEADHeader(cmdKey, authID, readerOrBytes) {
 	let headerPt;
 	try {
 		headerPt = await aesGcmDecrypt(headerKey, headerNonce, encryptedHeader, authID);
-	} catch (e) {
+	} catch {
 		return null;
 	}
 	const consumed = 18 + 8 + headerLen + 16;
@@ -562,13 +478,7 @@ export async function openVMessAEADHeader(cmdKey, authID, readerOrBytes) {
 	return { header: headerPt, remaining, consumed, nonce, authID };
 }
 
-function bytesToString(bytes) {
-	// KDF paths are strings, but authID and nonce are binary - in Go they use string(authID) which is raw bytes as string
-	// In JS, we need to pass them as binary strings where each byte is a char with same code
-	let s = '';
-	for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-	return s;
-}
+
 
 // Parse inner header (decrypted payload)
 // Returns { version, bodyIV, bodyKey, responseHeader, option, security, paddingLen, command, port, addressType, address, rawData, bodyKey, bodyIV }
@@ -776,7 +686,7 @@ function generateChacha20Poly1305Key(key16) {
 	})();
 }
 
-function generateChunkNonce(nonce16, count) {
+function generateChunkNonce(nonce16) {
 	// nonce = 2-byte BE count + first 10 bytes? Actually spec: IV = count (2 bytes) + IV (10 bytes), IV is bytes 2..11 of bodyIV (or 3..12?) Let's use bodyIV slice(2,12) as 10 bytes
 	// For VMess body, nonce is 12 bytes: 2 bytes count BE + 10 bytes from bodyIV[2:12]
 	// But the common implementation for VMess body is: nonce = uint16(count) BE + bodyIV[0:10] ??? Let's check spec.
@@ -844,7 +754,7 @@ export async function* vmessBodyReader(buffer, bodyKey, bodyIV, security, option
 	// To keep it simple, we will handle plain length and also try to handle masked length if the first chunk fails.
 
 	while (offset + 2 <= buffer.length) {
-		let len = (buffer[offset] << 8) | buffer[offset + 1];
+		const len = (buffer[offset] << 8) | buffer[offset + 1];
 		offset += 2;
 		if (hasMask) {
 			// Need to unmask - we would need Shake. For now, we assume no mask or we try to handle by trying both

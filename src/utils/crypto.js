@@ -48,7 +48,7 @@ export function base64SecretDecode(encoded, secret) {
 	return decoder.decode(data);
 }
 
-function pureMD5(string) {
+export function pureMD5(string) {
 	function rotateLeft(lValue, iShiftBits) {
 		return (lValue << iShiftBits) | (lValue >>> (32 - iShiftBits));
 	}
@@ -233,6 +233,15 @@ function pureMD5(string) {
 	return (wordToHex(a) + wordToHex(b) + wordToHex(c) + wordToHex(d)).toLowerCase();
 }
 
+export function pureMD5Bytes(stringOrBytes) {
+	const hex = pureMD5(stringOrBytes);
+	const bytes = new Uint8Array(16);
+	for (let i = 0; i < 16; i++) {
+		bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+	}
+	return bytes;
+}
+
 export async function MD5MD5(text) {
 	const encoder = new TextEncoder();
 	try {
@@ -249,7 +258,7 @@ export async function MD5MD5(text) {
 			.join('');
 
 		return secondHex.toLowerCase();
-	} catch (_) {
+	} catch {
 		const firstHex = pureMD5(text);
 		const secondHex = pureMD5(firstHex.slice(7, 27));
 		return secondHex.toLowerCase();

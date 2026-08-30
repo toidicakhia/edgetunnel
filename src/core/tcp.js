@@ -14,11 +14,11 @@ import { connectStreams } from './grain.js';
 import { connectTrojanProxy, extractTrojanProxyHandshakeData } from './protocol.js';
 import { createRequestTCPConnector, httpConnect, httpsConnect, socks5Connect } from './proxy.js';
 import { doHQuery, resolveAddressPort } from '../utils/doh.js';
-import { getValidDataLength, startTCPConnectorGeneration } from '../handlers/xhttp.js';
+import { getValidDataLength, log, toUint8Array } from '../utils/helpers.js';
 import { isIPHostname, isIPv4 } from '../utils/network.js';
-import { log, toUint8Array } from '../utils/helpers.js';
 import { sstpConnect } from './sstp.js';
 import { turnConnect } from './turn.js';
+
 
 export async function forwardTCP(
 	host,
@@ -74,7 +74,7 @@ export async function forwardTCP(
 				remoteConnWrapper.downlinkDrain = Promise.resolve();
 			try {
 				socket?.close?.();
-			} catch (_) {}
+			} catch {}
 			if (remoteConnWrapper.generation === generation) closeSocketQuietly(ws);
 			throw e;
 		}
@@ -85,7 +85,7 @@ export async function forwardTCP(
 		if (remoteConnWrapper.generation !== generation || ws.readyState !== WebSocket.OPEN) {
 			try {
 				socket?.close?.();
-			} catch (e) {}
+			} catch {}
 			if (remoteConnWrapper.generation === generation) remoteConnWrapper.socket = null;
 			throw new Error('connection superseded or client closed');
 		}
@@ -103,7 +103,7 @@ export async function forwardTCP(
 			log(`[TCPdownlink] processing failed: ${err?.message || err}`);
 			try {
 				socket?.close?.();
-			} catch (e) {}
+			} catch {}
 			closeSocketQuietly(ws);
 		});
 		return true;
@@ -126,7 +126,7 @@ export async function forwardTCP(
 		} catch (err) {
 			try {
 				remoteSock?.close?.();
-			} catch (e) {}
+			} catch {}
 			throw err;
 		}
 	}
@@ -139,7 +139,7 @@ export async function forwardTCP(
 		} finally {
 			try {
 				writer.releaseLock();
-			} catch (e) {}
+			} catch {}
 		}
 	}
 
@@ -169,7 +169,7 @@ export async function forwardTCP(
 							if (socket !== winner.socket) {
 								try {
 									socket?.close?.();
-								} catch (e) {}
+								} catch {}
 							}
 						})
 						.catch(() => {});
@@ -261,7 +261,7 @@ export async function forwardTCP(
 		} catch (err) {
 			try {
 				socket?.close?.();
-			} catch (e) {}
+			} catch {}
 			if (preloadCandidateList)
 				log(`[TCP Direct] preload race failed: ${err.message || err}`);
 			throw err;
@@ -306,7 +306,7 @@ export async function forwardTCP(
 				} catch (err) {
 					try {
 						socket?.close?.();
-					} catch (e) {}
+					} catch {}
 					log(`[Proxy Connection] this batch connection failed: ${err.message || err}`);
 				}
 			}
@@ -404,7 +404,7 @@ export async function forwardTCP(
 						} finally {
 							try {
 								writer.releaseLock();
-							} catch (e) {}
+							} catch {}
 						}
 					}
 				} else if (ctxproxyType === 'sstp') {
@@ -417,7 +417,7 @@ export async function forwardTCP(
 						} finally {
 							try {
 								writer.releaseLock();
-							} catch (e) {}
+							} catch {}
 						}
 					}
 				} else {
@@ -440,7 +440,7 @@ export async function forwardTCP(
 			} catch (err) {
 				try {
 					newSocket?.close?.();
-				} catch (e) {}
+				} catch {}
 				if (remoteConnWrapper.generation === currentConnectionGeneration) {
 					remoteConnWrapper.socket = null;
 					closeSocketQuietly(ws);
@@ -559,7 +559,7 @@ export function closeSocketQuietly(socket) {
 		if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CLOSING) {
 			socket.close();
 		}
-	} catch (error) {}
+	} catch {}
 }
 
 export function formatIdentifier(arr, offset = 0) {
@@ -573,3 +573,40 @@ export async function webSocketSendAndAwait(webSocket, payload) {
 	const sendResult = webSocket.send(payload);
 	if (sendResult && typeof sendResult.then === 'function') await sendResult;
 }
+
+export function invalidateTCPConnectorGeneration(remoteConnWrapper) {
+	if (!remoteConnWrapper) return;
+	remoteConnWrapper.generation =
+		(Number.isInteger(remoteConnWrapper.generation) ? remoteConnWrapper.generation : 0) + 1;
+	const socket = remoteConnWrapper.socket;
+	remoteConnWrapper.socket = null;
+	remoteConnWrapper.downlinkController = null;
+	remoteConnWrapper.downlinkDrain = Promise.resolve();
+	try {
+		socket?.close?.();
+	} catch {}
+}
+
+export function startTCPConnectorGeneration(remoteConnWrapper) {
+	if (!Number.isInteger(remoteConnWrapper.generation)) remoteConnWrapper.generation = 0;
+	const generation = ++remoteConnWrapper.generation;
+	const previousSocket = remoteConnWrapper.socket;
+	remoteConnWrapper.socket = null;
+	const previousDownlink = remoteConnWrapper.downlinkController;
+	remoteConnWrapper.downlinkController = null;
+	const previousDrain = remoteConnWrapper.downlinkDrain || Promise.resolve();
+	let currentDrain;
+	try {
+		currentDrain = previousDownlink?.stopAndFlush?.() || Promise.resolve();
+	} catch (error) {
+		currentDrain = Promise.reject(error);
+	}
+	const downlinkDrain = Promise.all([previousDrain, currentDrain]);
+	downlinkDrain.catch(() => {});
+	remoteConnWrapper.downlinkDrain = downlinkDrain;
+	try {
+		previousSocket?.close?.();
+	} catch {}
+	return { generation, downlinkDrain };
+}
+
