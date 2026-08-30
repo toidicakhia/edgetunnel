@@ -282,9 +282,9 @@ export function parseVLESSRequest(chunk, token) {
 	};
 }
 
-/** Response header: version byte only (0x00), plaintext. */
-export function encodeVLESSResponseHeader() {
-	return new Uint8Array([0]);
+/** Response header: [version][addons-len] — Xray EncodeResponseHeader; empty addons => 0x00. */
+export function encodeVLESSResponseHeader(version = 0) {
+	return new Uint8Array([version, 0]);
 }
 
 /** Encode one VLESS UDP packet: [2B BE length][payload]. */
