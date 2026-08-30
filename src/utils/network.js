@@ -3,6 +3,8 @@
  * Auto-generated from _worker.js refactor
  * Original: edgetunnel 2.1 (2026-08-11)
  */
+import { tryParseURL } from './helpers.js';
+
 export function stripIPv6Brackets(hostname = '') {
 	const host = String(hostname || '').trim();
 	return host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
@@ -13,12 +15,7 @@ export function isIPHostname(hostname = '') {
 	const ipv4Regex = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 	if (ipv4Regex.test(host)) return true;
 	if (!host.includes(':')) return false;
-	try {
-		new URL(`http://[${host}]/`);
-		return true;
-	} catch {
-		return false;
-	}
+	return Boolean(tryParseURL(`http://[${host}]/`));
 }
 
 //////////////////////////////////////////////////turnConnect///////////////////////////////////////////////

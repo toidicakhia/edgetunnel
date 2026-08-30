@@ -4,7 +4,7 @@
  * Original: edgetunnel 2.1 (2026-08-11)
  */
 import { CONNECT_TIMEOUT_MS, doHQuery } from '../utils/doh.js';
-import { concatByteData, getValidDataLength, toUint8Array } from '../utils/helpers.js';
+import { concatByteData, getValidDataLength, safeClose, safeCloseAll, safeRelease, toUint8Array } from '../utils/helpers.js';
 import { isIPv4, stripIPv6Brackets, withTimeout } from '../utils/network.js';
 
 import { textDecoder, textEncoder } from './tls.js';
@@ -154,19 +154,13 @@ export async function turnConnect(proxy, targetHost, targetPort, tcpConnector) {
 		dataReader = null,
 		dataReaderReleased = false;
 	const close = () => {
-		try {
-			controlSocket?.close?.();
-		} catch {}
-		try {
-			dataSocket?.close?.();
-		} catch {}
+		safeClose(controlSocket);
+		safeClose(dataSocket);
 	};
 	const releaseDataReader = () => {
 		if (dataReaderReleased) return;
 		dataReaderReleased = true;
-		try {
-			dataReader?.releaseLock?.();
-		} catch {}
+		safeRelease(dataReader);
 	};
 
 	try {
@@ -382,9 +376,7 @@ export async function turnConnect(proxy, targetHost, targetPort, tcpConnector) {
 				});
 			},
 			cancel() {
-				try {
-					dataReader?.cancel?.();
-				} catch {}
+				safeClose(dataReader);
 				releaseDataReader();
 				close();
 			},
@@ -392,15 +384,7 @@ export async function turnConnect(proxy, targetHost, targetPort, tcpConnector) {
 
 		return { readable, writable: dataSocket.writable, closed: dataSocket.closed, close };
 	} catch (error) {
-		try {
-			controlWriter?.releaseLock?.();
-		} catch {}
-		try {
-			controlReader?.releaseLock?.();
-		} catch {}
-		try {
-			dataWriter?.releaseLock?.();
-		} catch {}
+		safeCloseAll(controlWriter, controlReader, dataWriter);
 		releaseDataReader();
 		close();
 		throw error;

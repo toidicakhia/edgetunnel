@@ -4,7 +4,7 @@
  * Original: edgetunnel 2.1 (2026-08-11)
  */
 import { TlsClient } from './tls.js';
-import { concatByteData, getValidDataLength, log, toUint8Array } from '../utils/helpers.js';
+import { concatByteData, getValidDataLength, log, safeCloseAll, toUint8Array } from '../utils/helpers.js';
 import { isIPHostname, stripIPv6Brackets } from '../utils/network.js';
 import { parseTrojanProxyAddress } from './protocol.js';
 import { base64SecretDecode } from '../utils/crypto.js';
@@ -71,15 +71,7 @@ export async function socks5Connect(
 		reader.releaseLock();
 		return socket;
 	} catch (error) {
-		try {
-			writer.releaseLock();
-		} catch {}
-		try {
-			reader.releaseLock();
-		} catch {}
-		try {
-			socket.close();
-		} catch {}
+		safeCloseAll(writer, reader, socket);
 		throw error;
 	}
 }
@@ -168,15 +160,7 @@ export async function httpConnect(
 
 		return socket;
 	} catch (error) {
-		try {
-			writer.releaseLock();
-		} catch {}
-		try {
-			reader.releaseLock();
-		} catch {}
-		try {
-			socket.close();
-		} catch {}
+		safeCloseAll(writer, reader, socket);
 		throw error;
 	}
 }

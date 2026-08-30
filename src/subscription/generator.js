@@ -14,6 +14,8 @@ import {
 	generateVMessLink,
 } from './links.js';
 
+import { safeBtoa } from '../utils/helpers.js';
+
 export {
 	clashSubscriptionHotPatch,
 	singboxSubscriptionHotPatch,
@@ -28,9 +30,5 @@ export {
 export function buildBase64Subscription(links = []) {
 	const validLinks = Array.isArray(links) ? links.filter(Boolean) : [links];
 	const joined = validLinks.join('\n');
-	try {
-		return btoa(unescape(encodeURIComponent(joined)));
-	} catch {
-		return btoa(joined);
-	}
+	return safeBtoa(unescape(encodeURIComponent(joined)), safeBtoa(joined));
 }

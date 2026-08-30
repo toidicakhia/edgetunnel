@@ -38,6 +38,7 @@ import {
 	parseToArray,
 	randomPath,
 	replaceWildcardWithRandomChars,
+	safeClose,
 } from './utils/helpers.js';
 import {
 	createRequestTCPConnector,
@@ -390,174 +391,163 @@ export default {
 							});
 						const proxyParams = url.searchParams.get(proxyProtocol);
 						const startTime = Date.now();
+						let fullProxyParams = proxyParams;
 						let checkProxyResponse;
+						let tcpSocket = null,
+							tlsSocket = null;
 						try {
 							const checkParsed = await getSOCKS5Account(
 								proxyParams,
 								getProxyDefaultPort(proxyProtocol)
 							);
 							const { username, password, hostname, port } = checkParsed;
-							const fullProxyParams =
+							fullProxyParams =
 								username && password
 									? `${username}:${password}@${hostname}:${port}`
 									: `${hostname}:${port}`;
-							try {
-								const checkHost = 'cloudflare.com',
-									checkPort = 443,
-									encoder = new TextEncoder(),
-									decoder = new TextDecoder();
-								const tcpConnector = createRequestTCPConnector(request);
-								let tcpSocket = null,
-									tlsSocket = null;
-								try {
-									tcpSocket =
-										proxyProtocol === 'socks5'
-											? await socks5Connect(
+							const checkHost = 'cloudflare.com',
+								checkPort = 443,
+								encoder = new TextEncoder(),
+								decoder = new TextDecoder();
+							const tcpConnector = createRequestTCPConnector(request);
+							tcpSocket =
+								proxyProtocol === 'socks5'
+									? await socks5Connect(
+											checkHost,
+											checkPort,
+											new Uint8Array(0),
+											tcpConnector,
+											checkParsed
+										)
+									: proxyProtocol === 'turn'
+										? await turnConnect(
+												checkParsed,
+												checkHost,
+												checkPort,
+												tcpConnector
+											)
+										: proxyProtocol === 'sstp'
+											? await sstpConnect(
+													checkParsed,
 													checkHost,
 													checkPort,
-													new Uint8Array(0),
-													tcpConnector,
-													checkParsed
+													tcpConnector
 												)
-											: proxyProtocol === 'turn'
-												? await turnConnect(
-														checkParsed,
+											: proxyProtocol === 'https' &&
+												  isIPHostname(hostname)
+												? await httpsConnect(
 														checkHost,
 														checkPort,
-														tcpConnector
+														new Uint8Array(0),
+														tcpConnector,
+														checkParsed
 													)
-												: proxyProtocol === 'sstp'
-													? await sstpConnect(
-															checkParsed,
-															checkHost,
-															checkPort,
-															tcpConnector
-														)
-													: proxyProtocol === 'https' &&
-														  isIPHostname(hostname)
-														? await httpsConnect(
-																checkHost,
-																checkPort,
-																new Uint8Array(0),
-																tcpConnector,
-																checkParsed
-															)
-														: await httpConnect(
-																checkHost,
-																checkPort,
-																new Uint8Array(0),
-																proxyProtocol === 'https',
-																tcpConnector,
-																checkParsed
-															);
-									if (!tcpSocket)
-										throw new Error('Cannot connect to proxy server');
-									tlsSocket = new TlsClient(tcpSocket, {
-										serverName: checkHost,
-										insecure: true,
-									});
-									await tlsSocket.handshake();
-									await tlsSocket.write(
-										encoder.encode(
-											`GET /cdn-cgi/trace HTTP/1.1\r\nHost: ${checkHost}\r\nUser-Agent: Mozilla/5.0\r\nConnection: close\r\n\r\n`
-										)
-									);
-									let responseBuffer = new Uint8Array(0),
-										headerEndIndex = -1,
-										contentLength = null,
-										chunked = false;
-									const maxResponseBytes = 64 * 1024;
-									while (responseBuffer.length < maxResponseBytes) {
-										const value = await tlsSocket.read();
-										if (!value) break;
-										if (value.byteLength === 0) continue;
-										responseBuffer = concatByteData(responseBuffer, value);
-										if (headerEndIndex === -1) {
-											const crlfcrlf = responseBuffer.findIndex(
-												(_, i) =>
-													i < responseBuffer.length - 3 &&
-													responseBuffer[i] === 0x0d &&
-													responseBuffer[i + 1] === 0x0a &&
-													responseBuffer[i + 2] === 0x0d &&
-													responseBuffer[i + 3] === 0x0a
-											);
-											if (crlfcrlf !== -1) {
-												headerEndIndex = crlfcrlf + 4;
-												const headers = decoder.decode(
-													responseBuffer.slice(0, headerEndIndex)
-												);
-												const statusLine = headers.split('\r\n')[0] || '';
-												const statusMatch =
-													statusLine.match(/HTTP\/\d\.\d\s+(\d+)/);
-												const statusCode = statusMatch
-													? parseInt(statusMatch[1], 10)
-													: NaN;
-												if (
-													!Number.isFinite(statusCode) ||
-													statusCode < 200 ||
-													statusCode >= 300
-												)
-													throw new Error(
-														`Proxy check request failed: ${statusLine || 'invalid response'}`
+												: await httpConnect(
+														checkHost,
+														checkPort,
+														new Uint8Array(0),
+														proxyProtocol === 'https',
+														tcpConnector,
+														checkParsed
 													);
-												const lengthMatch = headers.match(
-													/\r\nContent-Length:\s*(\d+)/i
-												);
-												if (lengthMatch)
-													contentLength = parseInt(lengthMatch[1], 10);
-												chunked = /\r\nTransfer-Encoding:\s*chunked/i.test(
-													headers
-												);
-											}
-										}
-										if (
-											headerEndIndex !== -1 &&
-											contentLength !== null &&
-											responseBuffer.length >= headerEndIndex + contentLength
-										)
-											break;
-										if (
-											headerEndIndex !== -1 &&
-											chunked &&
-											decoder.decode(responseBuffer).includes('\r\n0\r\n\r\n')
-										)
-											break;
-									}
-									if (headerEndIndex === -1)
-										throw new Error(
-											'Proxy response header too long or invalid'
+							if (!tcpSocket)
+								throw new Error('Cannot connect to proxy server');
+							tlsSocket = new TlsClient(tcpSocket, {
+								serverName: checkHost,
+								insecure: true,
+							});
+							await tlsSocket.handshake();
+							await tlsSocket.write(
+								encoder.encode(
+									`GET /cdn-cgi/trace HTTP/1.1\r\nHost: ${checkHost}\r\nUser-Agent: Mozilla/5.0\r\nConnection: close\r\n\r\n`
+								)
+							);
+							let responseBuffer = new Uint8Array(0),
+								headerEndIndex = -1,
+								contentLength = null,
+								chunked = false;
+							const maxResponseBytes = 64 * 1024;
+							while (responseBuffer.length < maxResponseBytes) {
+								const value = await tlsSocket.read();
+								if (!value) break;
+								if (value.byteLength === 0) continue;
+								responseBuffer = concatByteData(responseBuffer, value);
+								if (headerEndIndex === -1) {
+									const crlfcrlf = responseBuffer.findIndex(
+										(_, i) =>
+											i < responseBuffer.length - 3 &&
+											responseBuffer[i] === 0x0d &&
+											responseBuffer[i + 1] === 0x0a &&
+											responseBuffer[i + 2] === 0x0d &&
+											responseBuffer[i + 3] === 0x0a
+									);
+									if (crlfcrlf !== -1) {
+										headerEndIndex = crlfcrlf + 4;
+										const headers = decoder.decode(
+											responseBuffer.slice(0, headerEndIndex)
 										);
-									const response = decoder.decode(responseBuffer);
-									const ip = response.match(/(?:^|\n)ip=(.*)/)?.[1];
-									const loc = response.match(/(?:^|\n)loc=(.*)/)?.[1];
-									if (!ip || !loc) throw new Error('Proxy response invalid');
-									checkProxyResponse = {
-										success: true,
-										proxy: proxyProtocol + '://' + fullProxyParams,
-										ip,
-										loc,
-										responseTime: Date.now() - startTime,
-									};
-								} finally {
-									try {
-										tlsSocket ? tlsSocket.close() : await tcpSocket?.close?.();
-									} catch {}
+										const statusLine = headers.split('\r\n')[0] || '';
+										const statusMatch =
+											statusLine.match(/HTTP\/\d\.\d\s+(\d+)/);
+										const statusCode = statusMatch
+											? parseInt(statusMatch[1], 10)
+											: NaN;
+										if (
+											!Number.isFinite(statusCode) ||
+											statusCode < 200 ||
+											statusCode >= 300
+										)
+											throw new Error(
+												`Proxy check request failed: ${statusLine || 'invalid response'}`
+											);
+										const lengthMatch = headers.match(
+											/\r\nContent-Length:\s*(\d+)/i
+										);
+										if (lengthMatch)
+											contentLength = parseInt(lengthMatch[1], 10);
+										chunked = /\r\nTransfer-Encoding:\s*chunked/i.test(
+											headers
+										);
+									}
 								}
-							} catch (error) {
-								checkProxyResponse = {
-									success: false,
-									error: error.message,
-									proxy: proxyProtocol + '://' + fullProxyParams,
-									responseTime: Date.now() - startTime,
-								};
+								if (
+									headerEndIndex !== -1 &&
+									contentLength !== null &&
+									responseBuffer.length >= headerEndIndex + contentLength
+								)
+									break;
+								if (
+									headerEndIndex !== -1 &&
+									chunked &&
+									decoder.decode(responseBuffer).includes('\r\n0\r\n\r\n')
+								)
+									break;
 							}
-						} catch (err) {
+							if (headerEndIndex === -1)
+								throw new Error(
+									'Proxy response header too long or invalid'
+								);
+							const response = decoder.decode(responseBuffer);
+							const ip = response.match(/(?:^|\n)ip=(.*)/)?.[1];
+							const loc = response.match(/(?:^|\n)loc=(.*)/)?.[1];
+							if (!ip || !loc) throw new Error('Proxy response invalid');
 							checkProxyResponse = {
-								success: false,
-								error: err.message,
-								proxy: proxyProtocol + '://' + proxyParams,
+								success: true,
+								proxy: proxyProtocol + '://' + fullProxyParams,
+								ip,
+								loc,
 								responseTime: Date.now() - startTime,
 							};
+						} catch (error) {
+							checkProxyResponse = {
+								success: false,
+								error: error.message,
+								proxy: proxyProtocol + '://' + fullProxyParams,
+								responseTime: Date.now() - startTime,
+							};
+						} finally {
+							safeClose(tlsSocket);
+							safeClose(tcpSocket);
 						}
 						return new Response(JSON.stringify(checkProxyResponse, null, 2), {
 							status: 200,

@@ -7,6 +7,8 @@ import { generateVMessLink } from '../core/vmess.js';
 
 export { generateVMessLink };
 
+import { safeBtoa } from '../utils/helpers.js';
+
 export function generateVLESSLink({
 	uuid,
 	host,
@@ -74,12 +76,7 @@ export function generateShadowsocksLink({
 	name = '',
 }) {
 	const userInfo = `${method}:${password}`;
-	let b64UserInfo;
-	try {
-		b64UserInfo = btoa(userInfo).replace(/=/g, '');
-	} catch {
-		b64UserInfo = userInfo;
-	}
+	const b64UserInfo = safeBtoa(userInfo, userInfo).replace(/=/g, '');
 	const tag = name ? `#${encodeURIComponent(name)}` : '';
 	return `ss://${b64UserInfo}@${host}:${port}${tag}`;
 }

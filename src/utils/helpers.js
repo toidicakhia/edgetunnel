@@ -30,6 +30,65 @@ export function log(...args) {
 	if (debugLogging) console.log(...args);
 }
 
+export function safeClose(resource) {
+	if (!resource) return;
+	try {
+		if (typeof resource.close === 'function') resource.close();
+		else if (typeof resource.cancel === 'function') resource.cancel().catch?.(() => {});
+	} catch {}
+}
+
+export function safeRelease(lockable) {
+	if (!lockable) return;
+	try {
+		if (typeof lockable.releaseLock === 'function') lockable.releaseLock();
+	} catch {}
+}
+
+export function safeCloseAll(...resources) {
+	for (const r of resources) {
+		if (!r) continue;
+		safeRelease(r);
+		safeClose(r);
+	}
+}
+
+export function tryParseJSON(str, fallback = null) {
+	if (typeof str !== 'string') return fallback;
+	try {
+		return JSON.parse(str);
+	} catch {
+		return fallback;
+	}
+}
+
+export function tryParseURL(str, base = undefined) {
+	if (!str || typeof str !== 'string') return null;
+	try {
+		return new URL(str, base);
+	} catch {
+		return null;
+	}
+}
+
+export function safeAtob(str, fallback = '') {
+	if (typeof str !== 'string') return fallback;
+	try {
+		return atob(str);
+	} catch {
+		return fallback;
+	}
+}
+
+export function safeBtoa(str, fallback = '') {
+	if (typeof str !== 'string') return fallback;
+	try {
+		return btoa(str);
+	} catch {
+		return fallback;
+	}
+}
+
 export function randomPath(fullNodePath = '/') {
 	const commonPathDirs = [
 		'about',

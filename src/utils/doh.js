@@ -5,7 +5,7 @@
  */
 import { featureCodeDict } from '../constants.js';
 import { identifyISP } from './network.js';
-import { log, parseToArray } from './helpers.js';
+import { log, parseToArray, tryParseURL } from './helpers.js';
 
 export const CONNECT_TIMEOUT_MS = 9999;
 
@@ -283,15 +283,14 @@ export async function fetchOptimalSubGeneratorData(optSubGeneratorHOST) {
 			.split('?')[0];
 	if (!/^https?:\/\//i.test(formattedHOST)) formattedHOST = `https://${formattedHOST}`;
 
-	try {
-		const url = new URL(formattedHOST);
-		formattedHOST = url.origin;
-	} catch (error) {
+	const url = tryParseURL(formattedHOST);
+	if (!url) {
 		optimalIP.push(
-			`127.0.0.1:1234#${optSubGeneratorHOST}optimal subscription generator format error:${error.message}`
+			`127.0.0.1:1234#${optSubGeneratorHOST}optimal subscription generator format error: Invalid URL`
 		);
 		return [optimalIP, otherNodesLINK];
 	}
+	formattedHOST = url.origin;
 
 	const optimalSubscriptionGeneratorURL = `${formattedHOST}/sub?host=example.com&uuid=00000000-0000-4000-8000-000000000000`;
 

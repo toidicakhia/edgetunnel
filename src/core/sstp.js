@@ -4,7 +4,7 @@
  * Original: edgetunnel 2.1 (2026-08-11)
  */
 import { CONNECT_TIMEOUT_MS, doHQuery } from '../utils/doh.js';
-import { concatByteData, toUint8Array } from '../utils/helpers.js';
+import { concatByteData, safeCloseAll, toUint8Array } from '../utils/helpers.js';
 import { isIPv4, stripIPv6Brackets, withTimeout } from '../utils/network.js';
 import { textDecoder, textEncoder } from './tls.js';
 
@@ -59,21 +59,7 @@ export async function sstpConnect(proxy, targetHost, targetPort, tcpConnector) {
 		settle(value);
 	};
 	const close = () => {
-		try {
-			reader?.cancel?.().catch?.(() => {});
-		} catch {}
-		try {
-			reader?.releaseLock?.();
-		} catch {}
-		try {
-			writer?.close?.().catch?.(() => {});
-		} catch {}
-		try {
-			writer?.releaseLock?.();
-		} catch {}
-		try {
-			socket?.close?.();
-		} catch {}
+		safeCloseAll(reader, writer, socket);
 		settleClosed(resolveClosed);
 	};
 

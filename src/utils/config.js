@@ -7,7 +7,7 @@ import { featureCodeDict } from '../constants.js';
 import { socks5Whitelist } from '../state.js';
 import { MD5MD5 } from './crypto.js';
 import { getXHTTPPaddingIdentifiers } from '../handlers/xhttp.js';
-import { log, parseToArray, randomPath } from './helpers.js';
+import { log, parseToArray, randomPath, tryParseJSON } from './helpers.js';
 import { generateVMessLink } from '../core/vmess.js';
 
 export function getTransportProtocolConfig(config = {}) {
@@ -76,39 +76,35 @@ export async function logRequest(
 			TIME: currentTime.getTime(),
 		};
 		if (config_JSON.TG.enable) {
-			try {
-				const TG_TXT = await env.KV.get('tg.json');
-				const TG_JSON = JSON.parse(TG_TXT);
-				if (TG_JSON?.BotToken && TG_JSON?.ChatID) {
-					const requestTime =
-						new Date(logEntry.TIME).toISOString().replace('T', ' ').slice(0, 19) +
-						' UTC';
-					const requestURL = new URL(logEntry.URL);
-					const msg =
-						`<b>#${config_JSON.optSubGenerator.SUBNAME} Log Notification</b>\n\n` +
-						`📌 <b>Type:</b> #${logEntry.TYPE}\n` +
-						`🌐 <b>IP:</b> <code>${logEntry.IP}</code>\n` +
-						`📍 <b>Location:</b> ${logEntry.CC}\n` +
-						`🏢 <b>ASN:</b> ${logEntry.ASN}\n` +
-						`🔗 <b>Domain:</b> <code>${requestURL.host}</code>\n` +
-						`🔍 <b>Path:</b> <code>${requestURL.pathname + requestURL.search}</code>\n` +
-						`🤖 <b>User-Agent:</b> <code>${logEntry.UA}</code>\n` +
-						`📅 <b>Time:</b> ${requestTime}\n` +
-						`${config_JSON.CF.Usage.success ? `📊 <b>Requests:</b> ${config_JSON.CF.Usage.total}/${config_JSON.CF.Usage.max} <b>${((config_JSON.CF.Usage.total / config_JSON.CF.Usage.max) * 100).toFixed(2)}%</b>\n` : ''}`;
-					await fetch(
-						`https://api.telegram.org/bot${TG_JSON.BotToken}/sendMessage?chat_id=${TG_JSON.ChatID}&parse_mode=HTML&text=${encodeURIComponent(msg)}`,
-						{
-							method: 'GET',
-							headers: {
-								Accept: 'text/html,application/xhtml+xml,application/xml;',
-								'Accept-Encoding': 'gzip, deflate, br',
-								'User-Agent': logEntry.UA || 'Unknown',
-							},
-						}
-					);
-				}
-			} catch (error) {
-				console.error(`readtg.jsonerror: ${error.message}`);
+			const TG_TXT = await env.KV.get('tg.json');
+			const TG_JSON = tryParseJSON(TG_TXT);
+			if (TG_JSON?.BotToken && TG_JSON?.ChatID) {
+				const requestTime =
+					new Date(logEntry.TIME).toISOString().replace('T', ' ').slice(0, 19) +
+					' UTC';
+				const requestURL = new URL(logEntry.URL);
+				const msg =
+					`<b>#${config_JSON.optSubGenerator.SUBNAME} Log Notification</b>\n\n` +
+					`📌 <b>Type:</b> #${logEntry.TYPE}\n` +
+					`🌐 <b>IP:</b> <code>${logEntry.IP}</code>\n` +
+					`📍 <b>Location:</b> ${logEntry.CC}\n` +
+					`🏢 <b>ASN:</b> ${logEntry.ASN}\n` +
+					`🔗 <b>Domain:</b> <code>${requestURL.host}</code>\n` +
+					`🔍 <b>Path:</b> <code>${requestURL.pathname + requestURL.search}</code>\n` +
+					`🤖 <b>User-Agent:</b> <code>${logEntry.UA}</code>\n` +
+					`📅 <b>Time:</b> ${requestTime}\n` +
+					`${config_JSON.CF.Usage.success ? `📊 <b>Requests:</b> ${config_JSON.CF.Usage.total}/${config_JSON.CF.Usage.max} <b>${((config_JSON.CF.Usage.total / config_JSON.CF.Usage.max) * 100).toFixed(2)}%</b>\n` : ''}`;
+				await fetch(
+					`https://api.telegram.org/bot${TG_JSON.BotToken}/sendMessage?chat_id=${TG_JSON.ChatID}&parse_mode=HTML&text=${encodeURIComponent(msg)}`,
+					{
+						method: 'GET',
+						headers: {
+							Accept: 'text/html,application/xhtml+xml,application/xml;',
+							'Accept-Encoding': 'gzip, deflate, br',
+							'User-Agent': logEntry.UA || 'Unknown',
+						},
+					}
+				).catch(() => {});
 			}
 		}
 		writeKVLog = ['1', 'true'].includes(env.OFF_LOG) ? false : writeKVLog;
@@ -117,39 +113,18 @@ export async function logRequest(
 		const existingLogs = await env.KV.get('log.json'),
 			KVcapacityLimit = 4; //MB
 		if (existingLogs) {
-			try {
-				logArray = JSON.parse(existingLogs);
-				if (!Array.isArray(logArray)) {
-					logArray = [logEntry];
-				} else if (requestType !== 'Get_SUB') {
-					const thirtyMinAgoTimestamp = currentTime.getTime() - 30 * 60 * 1000;
-					if (
-						logArray.some(
-							(log) =>
-								log.TYPE !== 'Get_SUB' &&
-								log.IP === accessIP &&
-								log.URL === request.url &&
-								log.UA === (request.headers.get('User-Agent') || 'Unknown') &&
-								log.TIME >= thirtyMinAgoTimestamp
-						)
-					)
-						return;
-					logArray.push(logEntry);
-					while (
-						JSON.stringify(logArray, null, 2).length > KVcapacityLimit * 1024 * 1024 &&
-						logArray.length > 0
-					)
-						logArray.shift();
-				} else {
-					logArray.push(logEntry);
-					while (
-						JSON.stringify(logArray, null, 2).length > KVcapacityLimit * 1024 * 1024 &&
-						logArray.length > 0
-					)
-						logArray.shift();
-				}
-			} catch {
+			const parsedLogs = tryParseJSON(existingLogs);
+			if (!Array.isArray(parsedLogs)) {
 				logArray = [logEntry];
+			} else {
+				logArray = parsedLogs;
+				logArray.push(logEntry);
+				while (
+					JSON.stringify(logArray, null, 2).length > KVcapacityLimit * 1024 * 1024 &&
+					logArray.length > 0
+				) {
+					logArray.shift();
+				}
 			}
 		} else {
 			logArray = [logEntry];
@@ -285,17 +260,12 @@ export async function readConfigJSON(
 			},
 		};
 
-	try {
-		const configJSON = await env.KV.get('config.json');
-		if (!configJSON || resetConfig == true) {
-			await env.KV.put('config.json', JSON.stringify(defaultConfigJSON, null, 2));
-			config_JSON = defaultConfigJSON;
-		} else {
-			config_JSON = JSON.parse(configJSON);
-		}
-	} catch (error) {
-		console.error(`readConfigJSONerror: ${error.message}`);
+	const configJSON = await env.KV.get('config.json');
+	if (!configJSON || resetConfig == true) {
+		await env.KV.put('config.json', JSON.stringify(defaultConfigJSON, null, 2)).catch?.(() => {});
 		config_JSON = defaultConfigJSON;
+	} else {
+		config_JSON = tryParseJSON(configJSON, defaultConfigJSON);
 	}
 
 	if (!config_JSON.optSubGenerator) {
@@ -471,17 +441,15 @@ export async function readConfigJSON(
 		enable: config_JSON.TG.enable ? config_JSON.TG.enable : false,
 		...initTG_JSON,
 	};
-	try {
-		const TG_TXT = await env.KV.get('tg.json');
-		if (!TG_TXT) {
-			await env.KV.put('tg.json', JSON.stringify(initTG_JSON, null, 2));
-		} else {
-			const TG_JSON = JSON.parse(TG_TXT);
+	const TG_TXT = await env.KV.get('tg.json');
+	if (!TG_TXT) {
+		await env.KV.put('tg.json', JSON.stringify(initTG_JSON, null, 2)).catch?.(() => {});
+	} else {
+		const TG_JSON = tryParseJSON(TG_TXT);
+		if (TG_JSON) {
 			config_JSON.TG.ChatID = TG_JSON.ChatID ? TG_JSON.ChatID : null;
 			config_JSON.TG.BotToken = TG_JSON.BotToken ? maskSensitiveInfo(TG_JSON.BotToken) : null;
 		}
-	} catch (error) {
-		console.error(`readtg.jsonerror: ${error.message}`);
 	}
 
 	const initCF_JSON = {
@@ -495,43 +463,35 @@ export async function readConfigJSON(
 		...initCF_JSON,
 		Usage: { success: false, pages: 0, workers: 0, total: 0, max: 100000 },
 	};
-	try {
-		const CF_TXT = await env.KV.get('cf.json');
-		if (!CF_TXT) {
-			await env.KV.put('cf.json', JSON.stringify(initCF_JSON, null, 2));
-		} else {
-			const CF_JSON = JSON.parse(CF_TXT);
-			if (CF_JSON.UsageAPI) {
-				try {
-					const response = await fetch(CF_JSON.UsageAPI);
-					const Usage = await response.json();
-					config_JSON.CF.Usage = Usage;
-				} catch (err) {
-					console.error(`request CF_JSON.UsageAPI failed: ${err.message}`);
-				}
-			} else {
-				config_JSON.CF.Email = CF_JSON.Email ? CF_JSON.Email : null;
-				config_JSON.CF.GlobalAPIKey = CF_JSON.GlobalAPIKey
-					? maskSensitiveInfo(CF_JSON.GlobalAPIKey)
-					: null;
-				config_JSON.CF.AccountID = CF_JSON.AccountID
-					? maskSensitiveInfo(CF_JSON.AccountID)
-					: null;
-				config_JSON.CF.APIToken = CF_JSON.APIToken
-					? maskSensitiveInfo(CF_JSON.APIToken)
-					: null;
-				config_JSON.CF.UsageAPI = null;
-				const Usage = await getCloudflareUsage(
-					CF_JSON.Email,
-					CF_JSON.GlobalAPIKey,
-					CF_JSON.AccountID,
-					CF_JSON.APIToken
-				);
-				config_JSON.CF.Usage = Usage;
-			}
+	const CF_TXT = await env.KV.get('cf.json');
+	if (!CF_TXT) {
+		await env.KV.put('cf.json', JSON.stringify(initCF_JSON, null, 2)).catch?.(() => {});
+	} else {
+		const CF_JSON = tryParseJSON(CF_TXT);
+		if (CF_JSON?.UsageAPI) {
+			const response = await fetch(CF_JSON.UsageAPI).catch?.(() => null);
+			const Usage = await response?.json?.().catch?.(() => null);
+			if (Usage) config_JSON.CF.Usage = Usage;
+		} else if (CF_JSON) {
+			config_JSON.CF.Email = CF_JSON.Email ? CF_JSON.Email : null;
+			config_JSON.CF.GlobalAPIKey = CF_JSON.GlobalAPIKey
+				? maskSensitiveInfo(CF_JSON.GlobalAPIKey)
+				: null;
+			config_JSON.CF.AccountID = CF_JSON.AccountID
+				? maskSensitiveInfo(CF_JSON.AccountID)
+				: null;
+			config_JSON.CF.APIToken = CF_JSON.APIToken
+				? maskSensitiveInfo(CF_JSON.APIToken)
+				: null;
+			config_JSON.CF.UsageAPI = null;
+			const Usage = await getCloudflareUsage(
+				CF_JSON.Email,
+				CF_JSON.GlobalAPIKey,
+				CF_JSON.AccountID,
+				CF_JSON.APIToken
+			);
+			config_JSON.CF.Usage = Usage;
 		}
-	} catch (error) {
-		console.error(`readcf.jsonerror: ${error.message}`);
 	}
 
 	config_JSON.loadTime = (performance.now() - initStartTime).toFixed(2) + 'ms';
