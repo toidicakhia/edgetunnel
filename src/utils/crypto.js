@@ -50,16 +50,34 @@ export function base64SecretDecode(encoded, secret) {
 
 export async function MD5MD5(text) {
 	const encoder = new TextEncoder();
+	try {
+		const firstHash = await crypto.subtle.digest('MD5', encoder.encode(text));
+		const firstHashArray = Array.from(new Uint8Array(firstHash));
+		const firstHex = firstHashArray
+			.map((bytes) => bytes.toString(16).padStart(2, '0'))
+			.join('');
 
-	const firstHash = await crypto.subtle.digest('MD5', encoder.encode(text));
-	const firstHashArray = Array.from(new Uint8Array(firstHash));
-	const firstHex = firstHashArray.map((bytes) => bytes.toString(16).padStart(2, '0')).join('');
+		const secondHash = await crypto.subtle.digest('MD5', encoder.encode(firstHex.slice(7, 27)));
+		const secondHashArray = Array.from(new Uint8Array(secondHash));
+		const secondHex = secondHashArray
+			.map((bytes) => bytes.toString(16).padStart(2, '0'))
+			.join('');
 
-	const secondHash = await crypto.subtle.digest('MD5', encoder.encode(firstHex.slice(7, 27)));
-	const secondHashArray = Array.from(new Uint8Array(secondHash));
-	const secondHex = secondHashArray.map((bytes) => bytes.toString(16).padStart(2, '0')).join('');
-
-	return secondHex.toLowerCase();
+		return secondHex.toLowerCase();
+	} catch (_) {
+		try {
+			const nodeCrypto = await import('node:crypto');
+			if (nodeCrypto?.createHash) {
+				const firstHex = nodeCrypto.createHash('md5').update(text).digest('hex');
+				const secondHex = nodeCrypto
+					.createHash('md5')
+					.update(firstHex.slice(7, 27))
+					.digest('hex');
+				return secondHex.toLowerCase();
+			}
+		} catch (e) {}
+		throw new Error('MD5 algorithm not supported in this runtime');
+	}
 }
 
 export function sha224(s) {

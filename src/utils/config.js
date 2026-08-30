@@ -899,7 +899,7 @@ export async function readConfigJSON(
 			gRPCUserAgent: UA,
 			skipCertVerify: false,
 			enable0RTT: false,
-			TLSfragment: null,
+			TLSFragment: null,
 			randomPath: false,
 			ECH: false,
 			ECHConfig: {
@@ -911,7 +911,7 @@ export async function readConfigJSON(
 				TLS: true,
 			},
 			Fingerprint: 'chrome',
-			optimalSubscriptionGeneration: {
+			optSubGenerator: {
 				local: true, // true: local-basedOptimalAddress  false: optimalSubscriptionGenerator
 				localIPDB: {
 					randomIP: true, // whenRandomIPIs true, enableRandomIPCount, otherwiseUseKVADD.txt
@@ -923,7 +923,7 @@ export async function readConfigJSON(
 				SUBUpdateTime: 3, // subscriptionUpdateTime（hours）
 				TOKEN: await MD5MD5(hostname + userID),
 			},
-			subscriptionConversionconfig: {
+			subConverterConfig: {
 				SUBAPI: `https://SUBAPI.${featureCodeDict[1]}ssss.net`,
 				SUBCONFIG: `https://raw.githubusercontent.com/${featureCodeDict[1]}/ACL4SSR/refs/heads/main/Clash/config/ACL4SSR_Online_Mini_MultiMode_CF.ini`,
 				SUBEMOJI: false,
@@ -999,6 +999,21 @@ export async function readConfigJSON(
 		console.error(`readConfigJSONerror: ${error.message}`);
 		config_JSON = defaultConfigJSON;
 	}
+
+	if (!config_JSON.optSubGenerator) {
+		config_JSON.optSubGenerator =
+			config_JSON.optimalSubscriptionGeneration || defaultConfigJSON.optSubGenerator;
+	}
+	if (!config_JSON.subConverterConfig) {
+		config_JSON.subConverterConfig =
+			config_JSON.subscriptionConversionconfig || defaultConfigJSON.subConverterConfig;
+	}
+	if (!config_JSON.proxy) config_JSON.proxy = defaultConfigJSON.proxy;
+	if (!config_JSON.proxy.pathTemplate)
+		config_JSON.proxy.pathTemplate = defaultConfigJSON.proxy.pathTemplate;
+	if (!config_JSON.proxy.SOCKS5) config_JSON.proxy.SOCKS5 = defaultConfigJSON.proxy.SOCKS5;
+	if (!config_JSON.TG) config_JSON.TG = defaultConfigJSON.TG;
+	if (!config_JSON.CF) config_JSON.CF = defaultConfigJSON.CF;
 
 	if (!config_JSON.subConverterConfig.SUBLIST) config_JSON.subConverterConfig.SUBLIST = false;
 	if (!config_JSON.subConverterConfig.UDP) config_JSON.subConverterConfig.UDP = false;
