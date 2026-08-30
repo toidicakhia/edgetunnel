@@ -3,11 +3,18 @@
  * Auto-generated from _worker.js refactor
  * Original: edgetunnel 2.1 (2026-08-11)
  */
-import { downlinkGrainLowWaterBytes, downlinkGrainMaxWaitRounds, downlinkGrainPacketBytes, downlinkGrainTailThreshold, uplinkBundleTargetBytes, uplinkQueueMaxBytes, uplinkQueueMaxEntries } from '../constants.js';
+import {
+	downlinkGrainLowWaterBytes,
+	downlinkGrainMaxWaitRounds,
+	downlinkGrainPacketBytes,
+	downlinkGrainTailThreshold,
+	uplinkBundleTargetBytes,
+	uplinkQueueMaxBytes,
+	uplinkQueueMaxEntries,
+} from '../constants.js';
 import { closeSocketQuietly, webSocketSendAndAwait } from './tcp.js';
 import { getValidDataLength } from '../handlers/xhttp.js';
 import { log, toUint8Array } from '../utils/helpers.js';
-
 
 export function createGrainBundler(capacity, copyBundleResult = false) {
 	let queue = [];
@@ -32,9 +39,15 @@ export function createGrainBundler(capacity, copyBundleResult = false) {
 	};
 
 	return {
-		get byteCount() { return byteCount },
-		get entryCount() { return queue.length - head },
-		get isEmpty() { return isEmpty() },
+		get byteCount() {
+			return byteCount;
+		},
+		get entryCount() {
+			return queue.length - head;
+		},
+		get isEmpty() {
+			return isEmpty();
+		},
 		clear(processItem = null) {
 			if (processItem) {
 				for (let i = head; i < queue.length; i++) {
@@ -55,7 +68,8 @@ export function createGrainBundler(capacity, copyBundleResult = false) {
 			const first = dequeue();
 			if (!first) return null;
 			const items = [first];
-			if (isEmpty() || first.chunk.byteLength >= capacity) return { chunk: first.chunk, items };
+			if (isEmpty() || first.chunk.byteLength >= capacity)
+				return { chunk: first.chunk, items };
 
 			let totalBytes = first.chunk.byteLength;
 			let end = head;
@@ -81,15 +95,15 @@ export function createGrainBundler(capacity, copyBundleResult = false) {
 			compact();
 			const bundled = output.subarray(0, totalBytes);
 			return { chunk: copyBundleResult ? bundled.slice() : bundled, items };
-		}
+		},
 	};
 }
 
-
 export function createUplinkGrainBundleStream(targetBytes = uplinkBundleTargetBytes) {
-	const identity = typeof IdentityTransformStream !== 'undefined'
-		? new IdentityTransformStream()
-		: new TransformStream();
+	const identity =
+		typeof IdentityTransformStream !== 'undefined'
+			? new IdentityTransformStream()
+			: new TransformStream();
 	const writer = identity.writable.getWriter();
 	const buffer = new Uint8Array(targetBytes);
 	let bufferLength = 0;
@@ -107,7 +121,11 @@ export function createUplinkGrainBundleStream(targetBytes = uplinkBundleTargetBy
 	const serialWrite = async (chunk) => {
 		if (pendingWrite) await pendingWrite;
 		pendingWrite = writer.write(chunk);
-		try { await pendingWrite } finally { pendingWrite = null; }
+		try {
+			await pendingWrite;
+		} finally {
+			pendingWrite = null;
+		}
 	};
 
 	const doFlush = async () => {
@@ -119,7 +137,7 @@ export function createUplinkGrainBundleStream(targetBytes = uplinkBundleTargetBy
 	};
 
 	const queueFlush = () => {
-		flushChain = flushChain.then(() => doFlush()).catch(() => { });
+		flushChain = flushChain.then(() => doFlush()).catch(() => {});
 	};
 
 	const startTimer = () => {
@@ -161,14 +179,22 @@ export function createUplinkGrainBundleStream(targetBytes = uplinkBundleTargetBy
 				await doFlush();
 				await writer.close();
 			} finally {
-				try { writer.releaseLock() } catch (e) { }
+				try {
+					writer.releaseLock();
+				} catch (e) {}
 			}
-		}
+		},
 	};
 }
 
-
-export function createUplinkWriteQueue({ getWriter, getConnectionTask = null, releaseWriter, retryConnection, closeConnection, name = 'uplink queue' }) {
+export function createUplinkWriteQueue({
+	getWriter,
+	getConnectionTask = null,
+	releaseWriter,
+	retryConnection,
+	closeConnection,
+	name = 'uplink queue',
+}) {
 	const grain = createGrainBundler(uplinkBundleTargetBytes);
 	let draining = false;
 	let closed = false;
@@ -193,7 +219,7 @@ export function createUplinkWriteQueue({ getWriter, getConnectionTask = null, re
 	const clear = (err = null) => {
 		const closeErr = err || (closed ? new Error(`${name}: queue closed`) : null);
 		if (closeErr) {
-			grain.clear(item => settleCompletions(item.completions, closeErr));
+			grain.clear((item) => settleCompletions(item.completions, closeErr));
 			settleCompletions(activeCompletions, closeErr);
 			activeCompletions = null;
 		} else grain.clear();
@@ -207,7 +233,8 @@ export function createUplinkWriteQueue({ getWriter, getConnectionTask = null, re
 		let completions = null;
 		for (const item of packed.items) {
 			allowRetry = allowRetry && item.allowRetry;
-			if (item.completions) completions = completions ? completions.concat(item.completions) : item.completions;
+			if (item.completions)
+				completions = completions ? completions.concat(item.completions) : item.completions;
 		}
 		return { chunk: packed.chunk, allowRetry, completions };
 	};
@@ -224,7 +251,7 @@ export function createUplinkWriteQueue({ getWriter, getConnectionTask = null, re
 		if (draining || closed) return;
 		draining = true;
 		try {
-			for (; ;) {
+			for (;;) {
 				if (closed) break;
 				const item = bundle();
 				if (!item) break;
@@ -258,7 +285,9 @@ export function createUplinkWriteQueue({ getWriter, getConnectionTask = null, re
 			closed = true;
 			clear(err);
 			log(`[${name}] write failed: ${err?.message || err}`);
-			try { closeConnection?.(err) } catch (_) { }
+			try {
+				closeConnection?.(err);
+			} catch (_) {}
 		} finally {
 			draining = false;
 			if (!closed && !grain.isEmpty) drain();
@@ -277,17 +306,24 @@ export function createUplinkWriteQueue({ getWriter, getConnectionTask = null, re
 		const nextItems = grain.entryCount + 1;
 		if (nextBytes > uplinkQueueMaxBytes || nextItems > uplinkQueueMaxEntries) {
 			closed = true;
-			const err = Object.assign(new Error(`${name}: upload queue overflow (${nextBytes}B/${nextItems})`), { isQueueOverflow: true });
+			const err = Object.assign(
+				new Error(`${name}: upload queue overflow (${nextBytes}B/${nextItems})`),
+				{ isQueueOverflow: true }
+			);
 			clear(err);
 			log(`[${name}] queue exceeded，closeConnection`);
-			try { closeConnection?.(err) } catch (_) { }
+			try {
+				closeConnection?.(err);
+			} catch (_) {}
 			throw err;
 		}
 		let completionPromise = null;
 		let completions = null;
 		if (waitForFlush) {
 			completions = [];
-			completionPromise = new Promise((resolve, reject) => completions.push({ resolve, reject }));
+			completionPromise = new Promise((resolve, reject) =>
+				completions.push({ resolve, reject })
+			);
 		}
 		grain.collect({ chunk, allowRetry, completions });
 		if (!draining) drain();
@@ -303,26 +339,28 @@ export function createUplinkWriteQueue({ getWriter, getConnectionTask = null, re
 		},
 		async waitEmpty() {
 			if (!grain.byteCount && !draining) return;
-			await new Promise(resolve => idleResolvers.push(resolve));
+			await new Promise((resolve) => idleResolvers.push(resolve));
 		},
 		clear() {
 			closed = true;
 			clear();
-		}
+		},
 	};
 }
-
 
 export function createDownlinkGrainSender(webSocket, headerData = null, isActive = null) {
 	const packetCap = downlinkGrainPacketBytes;
 	const tailBytes = downlinkGrainTailThreshold;
 	const grain = createGrainBundler(packetCap, true);
 	let header = typeof headerData === 'function' ? null : headerData;
-	const getResponseHeader = typeof headerData === 'function' ? headerData : () => {
-		const value = header;
-		header = null;
-		return value;
-	};
+	const getResponseHeader =
+		typeof headerData === 'function'
+			? headerData
+			: () => {
+					const value = header;
+					header = null;
+					return value;
+				};
 	let flushTimer = null;
 	let generation = 0;
 	let scheduledGeneration = 0;
@@ -337,7 +375,7 @@ export function createDownlinkGrainSender(webSocket, headerData = null, isActive
 	let activeSendWaiters = [];
 	const waitForActiveSendComplete = () => {
 		if (!activeSendCount && !activeDirectSendCount) return Promise.resolve();
-		return new Promise(resolve => activeSendWaiters.push(resolve));
+		return new Promise((resolve) => activeSendWaiters.push(resolve));
 	};
 	const markSendComplete = () => {
 		if (activeSendCount || activeDirectSendCount || !activeSendWaiters.length) return;
@@ -367,8 +405,9 @@ export function createDownlinkGrainSender(webSocket, headerData = null, isActive
 		while (directSendPromise) await directSendPromise;
 		const sendTask = sendRawChunk(chunk);
 		directSendPromise = sendTask;
-		try { await sendTask }
-		finally {
+		try {
+			await sendTask;
+		} finally {
 			if (directSendPromise === sendTask) directSendPromise = null;
 		}
 	};
@@ -392,7 +431,7 @@ export function createDownlinkGrainSender(webSocket, headerData = null, isActive
 			return;
 		}
 		const sendtask = (async () => {
-			for (; ;) {
+			for (;;) {
 				if (!isCurrentSenderActive()) {
 					grain.clear();
 					break;
@@ -402,10 +441,14 @@ export function createDownlinkGrainSender(webSocket, headerData = null, isActive
 				await serialSendRawChunk(packed.chunk);
 			}
 		})();
-		flushPromise = sendtask.catch(err => {
-			activeSendError ||= err;
-			throw err;
-		}).finally(() => { flushPromise = null });
+		flushPromise = sendtask
+			.catch((err) => {
+				activeSendError ||= err;
+				throw err;
+			})
+			.finally(() => {
+				flushPromise = null;
+			});
 		return flushPromise;
 	};
 
@@ -430,7 +473,10 @@ export function createDownlinkGrainSender(webSocket, headerData = null, isActive
 				flush().catch(closeActiveConnection);
 				return;
 			}
-			if (waitRounds < downlinkGrainMaxWaitRounds && (generation !== scheduledGeneration || grain.byteCount < downlinkGrainLowWaterBytes)) {
+			if (
+				waitRounds < downlinkGrainMaxWaitRounds &&
+				(generation !== scheduledGeneration || grain.byteCount < downlinkGrainLowWaterBytes)
+			) {
 				waitRounds++;
 				scheduledGeneration = generation;
 				scheduleFlush();
@@ -468,7 +514,10 @@ export function createDownlinkGrainSender(webSocket, headerData = null, isActive
 					const remainingBytes = totalBytes - offset;
 					if (grain.isEmpty && remainingBytes >= packetCap) {
 						const sendBytes = Math.min(packetCap, remainingBytes);
-						const view = offset || sendBytes !== totalBytes ? chunk.subarray(offset, offset + sendBytes) : chunk;
+						const view =
+							offset || sendBytes !== totalBytes
+								? chunk.subarray(offset, offset + sendBytes)
+								: chunk;
 						await serialSendRawChunk(view);
 						offset += sendBytes;
 						continue;
@@ -478,10 +527,16 @@ export function createDownlinkGrainSender(webSocket, headerData = null, isActive
 						await flush();
 						continue;
 					}
-					grain.collect({ chunk: offset || copyBytes !== totalBytes ? chunk.subarray(offset, offset + copyBytes) : chunk });
+					grain.collect({
+						chunk:
+							offset || copyBytes !== totalBytes
+								? chunk.subarray(offset, offset + copyBytes)
+								: chunk,
+					});
 					offset += copyBytes;
 					generation++;
-					if (grain.byteCount >= packetCap || packetCap - grain.byteCount < tailBytes) await flush();
+					if (grain.byteCount >= packetCap || packetCap - grain.byteCount < tailBytes)
+						await flush();
 					else scheduleFlush();
 				}
 			} catch (err) {
@@ -509,23 +564,43 @@ export function createDownlinkGrainSender(webSocket, headerData = null, isActive
 			while (directSendPromise) await directSendPromise;
 			checkActiveSendError();
 			await flush();
-		}
+		},
 	};
 }
 
-
-export async function connectStreams(remoteSocket, webSocket, headerData, retryFunc, isCurrentSocket = null, remoteConnWrapper = null) {
-	let header = headerData, hasData = false, reader, useBYOB = false, readError = null;
+export async function connectStreams(
+	remoteSocket,
+	webSocket,
+	headerData,
+	retryFunc,
+	isCurrentSocket = null,
+	remoteConnWrapper = null
+) {
+	let header = headerData,
+		hasData = false,
+		reader,
+		useBYOB = false,
+		readError = null;
 	const BYOBSingleReadLimit = 64 * 1024;
 	const currentIsConnectionStillValid = () => !isCurrentSocket || isCurrentSocket();
-	const downlinkSender = createDownlinkGrainSender(webSocket, header, currentIsConnectionStillValid);
+	const downlinkSender = createDownlinkGrainSender(
+		webSocket,
+		header,
+		currentIsConnectionStillValid
+	);
 	header = null;
 	const downlinkController = { stopAndFlush: () => downlinkSender.stopAndFlush() };
 	if (remoteConnWrapper) remoteConnWrapper.downlinkController = downlinkController;
-	try { remoteSocket.closed?.catch?.(() => { }) } catch (e) { }
+	try {
+		remoteSocket.closed?.catch?.(() => {});
+	} catch (e) {}
 
-	try { reader = remoteSocket.readable.getReader({ mode: 'byob' }); useBYOB = true }
-	catch (e) { reader = remoteSocket.readable.getReader() }
+	try {
+		reader = remoteSocket.readable.getReader({ mode: 'byob' });
+		useBYOB = true;
+	} catch (e) {
+		reader = remoteSocket.readable.getReader();
+	}
 
 	try {
 		if (!useBYOB) {
@@ -545,7 +620,9 @@ export async function connectStreams(remoteSocket, webSocket, headerData, retryF
 		} else {
 			let readBuffer = new ArrayBuffer(BYOBSingleReadLimit);
 			while (true) {
-				const { done, value } = await reader.read(new Uint8Array(readBuffer, 0, BYOBSingleReadLimit));
+				const { done, value } = await reader.read(
+					new Uint8Array(readBuffer, 0, BYOBSingleReadLimit)
+				);
 				if (!currentIsConnectionStillValid()) break;
 				if (done) break;
 				if (!value || value.byteLength === 0) continue;
@@ -556,22 +633,42 @@ export async function connectStreams(remoteSocket, webSocket, headerData, retryF
 					readBuffer = new ArrayBuffer(BYOBSingleReadLimit);
 				} else {
 					await downlinkSender.send(value.slice());
-					readBuffer = value.buffer.byteLength >= BYOBSingleReadLimit ? value.buffer : new ArrayBuffer(BYOBSingleReadLimit);
+					readBuffer =
+						value.buffer.byteLength >= BYOBSingleReadLimit
+							? value.buffer
+							: new ArrayBuffer(BYOBSingleReadLimit);
 				}
 			}
 		}
 		if (currentIsConnectionStillValid()) await downlinkSender.flush();
-	} catch (err) { readError = err }
-	finally {
+	} catch (err) {
+		readError = err;
+	} finally {
 		if (currentIsConnectionStillValid() && webSocket.readyState === WebSocket.OPEN) {
-			try { await downlinkSender.stopAndFlush() } catch (err) { readError ||= err }
+			try {
+				await downlinkSender.stopAndFlush();
+			} catch (err) {
+				readError ||= err;
+			}
 		}
-		if (remoteConnWrapper?.downlinkController === downlinkController) remoteConnWrapper.downlinkController = null;
-		try { await reader.cancel() } catch (e) { }
-		try { reader.releaseLock() } catch (e) { }
-		try { remoteSocket.close() } catch (e) { }
+		if (remoteConnWrapper?.downlinkController === downlinkController)
+			remoteConnWrapper.downlinkController = null;
+		try {
+			await reader.cancel();
+		} catch (e) {}
+		try {
+			reader.releaseLock();
+		} catch (e) {}
+		try {
+			remoteSocket.close();
+		} catch (e) {}
 	}
-	if (!hasData && retryFunc && webSocket.readyState === WebSocket.OPEN && currentIsConnectionStillValid()) {
+	if (
+		!hasData &&
+		retryFunc &&
+		webSocket.readyState === WebSocket.OPEN &&
+		currentIsConnectionStillValid()
+	) {
 		try {
 			await retryFunc();
 			return;
@@ -584,41 +681,41 @@ export async function connectStreams(remoteSocket, webSocket, headerData, retryF
 	closeSocketQuietly(webSocket);
 }
 
-
 export function isSpeedTestSite(hostname) {
 	const speedTestDomains = ['speed.cloudflare.com', 'cp.cloudflare.com'];
 	hostname = hostname.toLowerCase();
-	return speedTestDomains.some(domain => hostname === domain || hostname.endsWith('.' + domain));
+	return speedTestDomains.some(
+		(domain) => hostname === domain || hostname.endsWith('.' + domain)
+	);
 }
-
 
 export function buildLocal204Response(respHeader = null) {
 	const local204Response = new TextEncoder().encode(
-		'HTTP/1.1 204 No Content\r\n' +
-		'Content-Length: 0\r\n' +
-		'Connection: close\r\n' +
-		'\r\n'
+		'HTTP/1.1 204 No Content\r\n' + 'Content-Length: 0\r\n' + 'Connection: close\r\n' + '\r\n'
 	);
 	if (getValidDataLength(respHeader) === 0) return local204Response;
 	const protocolResponseHeader = toUint8Array(respHeader);
-	const response = new Uint8Array(protocolResponseHeader.byteLength + local204Response.byteLength);
+	const response = new Uint8Array(
+		protocolResponseHeader.byteLength + local204Response.byteLength
+	);
 	response.set(protocolResponseHeader, 0);
 	response.set(local204Response, protocolResponseHeader.byteLength);
 	log(`[TCPforward] buildLocal204Response: ${response.byteLength}B`);
 	return response;
 }
 
-
 export function buildWSLocal204Response(respHeader = null) {
 	const WSlocal204Response = new TextEncoder().encode(
 		'HTTP/1.1 204 No Content\r\n' +
-		'Content-Length: 0\r\n' +
-		'Connection: keep-alive\r\n' +
-		'\r\n'
+			'Content-Length: 0\r\n' +
+			'Connection: keep-alive\r\n' +
+			'\r\n'
 	);
 	if (getValidDataLength(respHeader) === 0) return WSlocal204Response;
 	const protocolResponseHeader = toUint8Array(respHeader);
-	const response = new Uint8Array(protocolResponseHeader.byteLength + WSlocal204Response.byteLength);
+	const response = new Uint8Array(
+		protocolResponseHeader.byteLength + WSlocal204Response.byteLength
+	);
 	response.set(protocolResponseHeader, 0);
 	response.set(WSlocal204Response, protocolResponseHeader.byteLength);
 	return response;

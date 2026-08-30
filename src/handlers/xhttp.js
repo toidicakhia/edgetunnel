@@ -3,38 +3,32 @@
  * Auto-generated from _worker.js refactor
  * Original: edgetunnel 2.1 (2026-08-11)
  */
-import { buildLocal204Response, createUplinkGrainBundleStream, isSpeedTestSite } from '../core/grain.js';
+import {
+	buildLocal204Response,
+	createUplinkGrainBundleStream,
+	isSpeedTestSite,
+} from '../core/grain.js';
 import { closeSocketQuietly, forwardTCP, forwardUDP } from '../core/tcp.js';
 import { forwardTrojanUDPData, uuidBytesMatch, vlessTextDecoder } from '../core/protocol.js';
 import { log } from '../utils/helpers.js';
 import { sha224 } from '../utils/crypto.js';
 
-
 export const HPACKHuffmanCodeLen = [
-	13, 23, 28, 28, 28, 28, 28, 28, 28, 24, 30, 28, 28, 30, 28, 28,
-	28, 28, 28, 28, 28, 28, 30, 28, 28, 28, 28, 28, 28, 28, 28, 28,
-	6, 10, 10, 12, 13, 6, 8, 11, 10, 10, 8, 11, 8, 6, 6, 6,
-	5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 7, 8, 15, 6, 12, 10,
-	13, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-	7, 7, 7, 7, 7, 7, 7, 7, 8, 7, 8, 13, 19, 13, 14, 6,
-	15, 5, 6, 5, 6, 5, 6, 6, 6, 5, 7, 7, 6, 6, 6, 5,
-	6, 7, 6, 5, 5, 6, 7, 7, 7, 7, 7, 15, 11, 14, 13, 28,
-	20, 22, 20, 20, 22, 22, 22, 23, 22, 23, 23, 23, 23, 23, 24, 23,
-	24, 24, 22, 23, 24, 23, 23, 23, 23, 21, 22, 23, 22, 23, 23, 24,
-	22, 21, 20, 22, 22, 23, 23, 21, 23, 22, 22, 24, 21, 22, 23, 23,
-	21, 21, 22, 21, 23, 22, 23, 23, 20, 22, 22, 22, 23, 22, 22, 23,
-	26, 26, 20, 19, 22, 23, 22, 25, 26, 26, 26, 27, 27, 26, 24, 25,
-	19, 21, 26, 27, 27, 26, 27, 24, 21, 21, 26, 26, 28, 27, 27, 27,
-	20, 24, 20, 21, 22, 21, 21, 23, 22, 22, 25, 25, 24, 24, 26, 23,
-	26, 27, 26, 26, 27, 27, 27, 27, 27, 28, 27, 27, 27, 27, 27, 26,
-	30
+	13, 23, 28, 28, 28, 28, 28, 28, 28, 24, 30, 28, 28, 30, 28, 28, 28, 28, 28, 28, 28, 28, 30, 28,
+	28, 28, 28, 28, 28, 28, 28, 28, 6, 10, 10, 12, 13, 6, 8, 11, 10, 10, 8, 11, 8, 6, 6, 6, 5, 5, 5,
+	6, 6, 6, 6, 6, 6, 6, 7, 8, 15, 6, 12, 10, 13, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+	7, 7, 7, 7, 7, 7, 8, 7, 8, 13, 19, 13, 14, 6, 15, 5, 6, 5, 6, 5, 6, 6, 6, 5, 7, 7, 6, 6, 6, 5,
+	6, 7, 6, 5, 5, 6, 7, 7, 7, 7, 7, 15, 11, 14, 13, 28, 20, 22, 20, 20, 22, 22, 22, 23, 22, 23, 23,
+	23, 23, 23, 24, 23, 24, 24, 22, 23, 24, 23, 23, 23, 23, 21, 22, 23, 22, 23, 23, 24, 22, 21, 20,
+	22, 22, 23, 23, 21, 23, 22, 22, 24, 21, 22, 23, 23, 21, 21, 22, 21, 23, 22, 23, 23, 20, 22, 22,
+	22, 23, 22, 22, 23, 26, 26, 20, 19, 22, 23, 22, 25, 26, 26, 26, 27, 27, 26, 24, 25, 19, 21, 26,
+	27, 27, 26, 27, 24, 21, 21, 26, 26, 28, 27, 27, 27, 20, 24, 20, 21, 22, 21, 21, 23, 22, 22, 25,
+	25, 24, 24, 26, 23, 26, 27, 26, 26, 27, 27, 27, 27, 27, 28, 27, 27, 27, 27, 27, 26, 30,
 ];
-
 
 export function getXHTTPPaddingIdentifiers(yourUUID) {
 	return { head: yourUUID.slice(1, 7), key: '_' + yourUUID.slice(25, 31) };
 }
-
 
 export function calculateHPACKHuffmanByteLength(str) {
 	const bytes = new TextEncoder().encode(str);
@@ -45,7 +39,6 @@ export function calculateHPACKHuffmanByteLength(str) {
 	return Math.ceil(totalBits / 8);
 }
 
-
 export function extractXHTTPPaddingValue(request, localPaddingHeader, localPaddingKey) {
 	const headerValue = request.headers.get(localPaddingHeader);
 	if (headerValue) {
@@ -53,13 +46,12 @@ export function extractXHTTPPaddingValue(request, localPaddingHeader, localPaddi
 			const parsedURL = new URL(headerValue, 'https://x.invalid');
 			const queryValue = parsedURL.searchParams.get(localPaddingKey);
 			if (queryValue) return queryValue;
-		} catch (e) { }
+		} catch (e) {}
 		return headerValue;
 	}
 	const requestURL = new URL(request.url);
 	return requestURL.searchParams.get(localPaddingKey) || '';
 }
-
 
 export function validateXHTTPPadding(request, localPaddingHeader, localPaddingKey) {
 	const paddingValue = extractXHTTPPaddingValue(request, localPaddingHeader, localPaddingKey);
@@ -67,7 +59,6 @@ export function validateXHTTPPadding(request, localPaddingHeader, localPaddingKe
 	const huffmanlength = calculateHPACKHuffmanByteLength(paddingValue);
 	return huffmanlength >= 98 && huffmanlength <= 1002;
 }
-
 
 export const xhttpBase62Charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 
@@ -80,56 +71,75 @@ export function generateXHTTPPaddingString(length) {
 	return result;
 }
 
-
 export async function handleXHTTPRequest(request, yourUUID, proxyContext = {}) {
 	if (!request.body) return new Response('Bad Request', { status: 400 });
 	const { head: localPaddingHeader, key: localPaddingKey } = getXHTTPPaddingIdentifiers(yourUUID);
-	if (!validateXHTTPPadding(request, localPaddingHeader, localPaddingKey)) return new Response('Bad Request', { status: 400 });
+	if (!validateXHTTPPadding(request, localPaddingHeader, localPaddingKey))
+		return new Response('Bad Request', { status: 400 });
 	const reader = request.body.getReader();
 	const firstPacket = await readXHTTPFirstPacket(reader, yourUUID);
 	if (!firstPacket) {
-		try { reader.releaseLock() } catch (e) { }
+		try {
+			reader.releaseLock();
+		} catch (e) {}
 		return new Response('Invalid request', { status: 400 });
 	}
 	if (isSpeedTestSite(firstPacket.hostname) && proxyContext.proxyType === null) {
-		try { reader.releaseLock() } catch (e) { }
+		try {
+			reader.releaseLock();
+		} catch (e) {}
 		return new Response(buildLocal204Response(firstPacket.respHeader), {
 			status: 200,
 			headers: {
 				'Content-Type': 'application/octet-stream',
 				'X-Accel-Buffering': 'no',
-				'Cache-Control': 'no-store'
-			}
+				'Cache-Control': 'no-store',
+			},
 		});
 	}
 	if (firstPacket.isUDP && firstPacket.protocol !== 'trojan' && firstPacket.port !== 53) {
-		try { reader.releaseLock() } catch (e) { }
+		try {
+			reader.releaseLock();
+		} catch (e) {}
 		return new Response('UDP is not supported', { status: 400 });
 	}
 
 	const responseHeaders = new Headers({
 		'Content-Type': 'application/octet-stream',
 		'X-Accel-Buffering': 'no',
-		'Cache-Control': 'no-store'
+		'Cache-Control': 'no-store',
 	});
 
 	try {
 		const responseURL = new URL('https://x.invalid/');
-		responseURL.searchParams.set(localPaddingKey, generateXHTTPPaddingString(100 + Math.floor(Math.random() * 901)));
+		responseURL.searchParams.set(
+			localPaddingKey,
+			generateXHTTPPaddingString(100 + Math.floor(Math.random() * 901))
+		);
 		responseHeaders.set(localPaddingHeader, responseURL.toString());
-	} catch (e) { }
+	} catch (e) {}
 
-	if (firstPacket.isUDP) return handleXHTTPUDPRequest(firstPacket, reader, request, proxyContext, responseHeaders);
+	if (firstPacket.isUDP)
+		return handleXHTTPUDPRequest(firstPacket, reader, request, proxyContext, responseHeaders);
 
-	try { reader.releaseLock() } catch (e) { }
+	try {
+		reader.releaseLock();
+	} catch (e) {}
 
-	const remoteConnWrapper = { socket: null, connectingPromise: null, retryConnect: null, downlinkDrain: Promise.resolve() };
+	const remoteConnWrapper = {
+		socket: null,
+		connectingPromise: null,
+		retryConnect: null,
+		downlinkDrain: Promise.resolve(),
+	};
 	const abortController = new AbortController();
 	let isCleaned = false;
 	const cleanup = (reason) => {
 		if (isCleaned) return;
 		isCleaned = true;
-		try { abortController.abort(reason) } catch (e) { }
+		try {
+			abortController.abort(reason);
+		} catch (e) {}
 		invalidateTCPConnectorGeneration(remoteConnWrapper);
 	};
 
@@ -137,7 +147,20 @@ export async function handleXHTTPRequest(request, yourUUID, proxyContext = {}) {
 
 	let socket;
 	try {
-		socket = await forwardTCP(firstPacket.hostname, firstPacket.port, firstPacket.rawData, placeholderWS, firstPacket.respHeader, remoteConnWrapper, yourUUID, request, proxyContext, firstPacket.protocol === 'trojan', firstPacket.rawData, true);
+		socket = await forwardTCP(
+			firstPacket.hostname,
+			firstPacket.port,
+			firstPacket.rawData,
+			placeholderWS,
+			firstPacket.respHeader,
+			remoteConnWrapper,
+			yourUUID,
+			request,
+			proxyContext,
+			firstPacket.protocol === 'trojan',
+			firstPacket.rawData,
+			true
+		);
 	} catch (err) {
 		log(`[XHTTP-Pipe] connection failed: ${err?.message || err}`);
 		cleanup(err);
@@ -150,11 +173,15 @@ export async function handleXHTTPRequest(request, yourUUID, proxyContext = {}) {
 
 	const uplinkPromise = (async () => {
 		const uplinkBundler = createUplinkGrainBundleStream();
-		const pipePromise = uplinkBundler.readable.pipeTo(socket.writable, { signal: abortController.signal });
+		const pipePromise = uplinkBundler.readable.pipeTo(socket.writable, {
+			signal: abortController.signal,
+		});
 		void pipePromise.catch(cleanup);
 		const uplinkReader = request.body.getReader();
 		const cancelUplinkReader = () => {
-			try { uplinkReader.cancel(abortController.signal.reason).catch(() => { }); } catch (e) { }
+			try {
+				uplinkReader.cancel(abortController.signal.reason).catch(() => {});
+			} catch (e) {}
 		};
 		abortController.signal.addEventListener('abort', cancelUplinkReader, { once: true });
 		try {
@@ -166,26 +193,36 @@ export async function handleXHTTPRequest(request, yourUUID, proxyContext = {}) {
 				}
 			} finally {
 				abortController.signal.removeEventListener('abort', cancelUplinkReader);
-				try { uplinkReader.releaseLock() } catch (e) { }
+				try {
+					uplinkReader.releaseLock();
+				} catch (e) {}
 			}
 		} finally {
-			try { await uplinkBundler.end() } catch (e) { }
+			try {
+				await uplinkBundler.end();
+			} catch (e) {}
 		}
 		await pipePromise;
 	})();
 
-	const responseStream = typeof IdentityTransformStream !== 'undefined'
-		? new IdentityTransformStream()
-		: new TransformStream();
+	const responseStream =
+		typeof IdentityTransformStream !== 'undefined'
+			? new IdentityTransformStream()
+			: new TransformStream();
 	const downlinkPromise = (async () => {
 		const writer = responseStream.writable.getWriter();
 		try {
-			if (getValidDataLength(firstPacket.respHeader) > 0) await writer.write(firstPacket.respHeader);
+			if (getValidDataLength(firstPacket.respHeader) > 0)
+				await writer.write(firstPacket.respHeader);
 		} catch (error) {
-			try { await writer.abort(error) } catch (e) { }
+			try {
+				await writer.abort(error);
+			} catch (e) {}
 			throw error;
 		} finally {
-			try { writer.releaseLock() } catch (e) { }
+			try {
+				writer.releaseLock();
+			} catch (e) {}
 		}
 		await socket.readable.pipeTo(responseStream.writable, { signal: abortController.signal });
 	})();
@@ -197,78 +234,128 @@ export async function handleXHTTPRequest(request, yourUUID, proxyContext = {}) {
 	return new Response(responseStream.readable, { status: 200, headers: responseHeaders });
 }
 
-
 export function handleXHTTPUDPRequest(firstPacket, reader, request, proxyContext, responseHeaders) {
-	const trojanUDPContext = { buffer: new Uint8Array(0), proxyAddress: proxyContext.trojanProxyAddress };
-	return new Response(new ReadableStream({
-		async start(controller) {
-			let isClosed = false;
-			let udpRespHeader = firstPacket.respHeader;
-			const httpBridge = {
-				readyState: WebSocket.OPEN,
-				send(data) {
-					if (isClosed) return;
-					try {
-						const chunk = data instanceof Uint8Array
-							? data
-							: data instanceof ArrayBuffer
-								? new Uint8Array(data)
-								: ArrayBuffer.isView(data)
-									? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
-									: new Uint8Array(data);
-						controller.enqueue(chunk);
-					} catch (e) {
+	const trojanUDPContext = {
+		buffer: new Uint8Array(0),
+		proxyAddress: proxyContext.trojanProxyAddress,
+	};
+	return new Response(
+		new ReadableStream({
+			async start(controller) {
+				let isClosed = false;
+				let udpRespHeader = firstPacket.respHeader;
+				const httpBridge = {
+					readyState: WebSocket.OPEN,
+					send(data) {
+						if (isClosed) return;
+						try {
+							const chunk =
+								data instanceof Uint8Array
+									? data
+									: data instanceof ArrayBuffer
+										? new Uint8Array(data)
+										: ArrayBuffer.isView(data)
+											? new Uint8Array(
+													data.buffer,
+													data.byteOffset,
+													data.byteLength
+												)
+											: new Uint8Array(data);
+							controller.enqueue(chunk);
+						} catch (e) {
+							isClosed = true;
+							this.readyState = WebSocket.CLOSED;
+						}
+					},
+					close() {
+						if (isClosed) return;
 						isClosed = true;
 						this.readyState = WebSocket.CLOSED;
+						try {
+							controller.close();
+						} catch (e) {}
+					},
+				};
+				let forwardFailed = false;
+				try {
+					if (firstPacket.protocol === 'trojan') {
+						trojanUDPContext.targetHost = firstPacket.hostname;
+						trojanUDPContext.targetPort = firstPacket.port;
+						if (trojanUDPContext.proxyAddress)
+							await forwardTrojanUDPData(
+								firstPacket.rawData,
+								httpBridge,
+								trojanUDPContext,
+								request
+							);
 					}
-				},
-				close() {
-					if (isClosed) return;
-					isClosed = true;
-					this.readyState = WebSocket.CLOSED;
-					try { controller.close() } catch (e) { }
+					if (
+						!(firstPacket.protocol === 'trojan' && trojanUDPContext.proxyAddress) &&
+						firstPacket.rawData?.byteLength
+					) {
+						if (firstPacket.protocol === 'trojan')
+							await forwardTrojanUDPData(
+								firstPacket.rawData,
+								httpBridge,
+								trojanUDPContext,
+								request
+							);
+						else
+							await forwardUDP(
+								firstPacket.rawData,
+								httpBridge,
+								udpRespHeader,
+								request
+							);
+						udpRespHeader = null;
+					}
+					while (true) {
+						const { done, value } = await reader.read();
+						if (done) break;
+						if (!value || value.byteLength === 0) continue;
+						if (firstPacket.protocol === 'trojan')
+							await forwardTrojanUDPData(
+								value,
+								httpBridge,
+								trojanUDPContext,
+								request
+							);
+						else await forwardUDP(value, httpBridge, udpRespHeader, request);
+						udpRespHeader = null;
+					}
+				} catch (err) {
+					forwardFailed = true;
+					log(`[XHTTP-forward] processing failed: ${err?.message || err}`);
+					closeSocketQuietly(httpBridge);
+				} finally {
+					const keepTrojanUDPProxyDown =
+						!forwardFailed &&
+						firstPacket.protocol === 'trojan' &&
+						trojanUDPContext.proxyAddress &&
+						trojanUDPContext.proxySocket;
+					if (!keepTrojanUDPProxyDown) {
+						try {
+							trojanUDPContext.proxySocket?.close();
+						} catch (e) {}
+						closeSocketQuietly(httpBridge);
+					}
+					try {
+						reader.releaseLock();
+					} catch (e) {}
 				}
-			};
-			let forwardFailed = false;
-			try {
-				if (firstPacket.protocol === 'trojan') {
-					trojanUDPContext.targetHost = firstPacket.hostname;
-					trojanUDPContext.targetPort = firstPacket.port;
-					if (trojanUDPContext.proxyAddress) await forwardTrojanUDPData(firstPacket.rawData, httpBridge, trojanUDPContext, request);
-				}
-				if (!(firstPacket.protocol === 'trojan' && trojanUDPContext.proxyAddress) && firstPacket.rawData?.byteLength) {
-					if (firstPacket.protocol === 'trojan') await forwardTrojanUDPData(firstPacket.rawData, httpBridge, trojanUDPContext, request);
-					else await forwardUDP(firstPacket.rawData, httpBridge, udpRespHeader, request);
-					udpRespHeader = null;
-				}
-				while (true) {
-					const { done, value } = await reader.read();
-					if (done) break;
-					if (!value || value.byteLength === 0) continue;
-					if (firstPacket.protocol === 'trojan') await forwardTrojanUDPData(value, httpBridge, trojanUDPContext, request);
-					else await forwardUDP(value, httpBridge, udpRespHeader, request);
-					udpRespHeader = null;
-				}
-			} catch (err) {
-				forwardFailed = true;
-				log(`[XHTTP-forward] processing failed: ${err?.message || err}`);
-				closeSocketQuietly(httpBridge);
-			} finally {
-			const keepTrojanUDPProxyDown = !forwardFailed && firstPacket.protocol === 'trojan' && trojanUDPContext.proxyAddress && trojanUDPContext.proxySocket;
-			if (!keepTrojanUDPProxyDown) {
-				try { trojanUDPContext.proxySocket?.close() } catch (e) { }
-				closeSocketQuietly(httpBridge);
-			}
-			try { reader.releaseLock() } catch (e) { }
-			}
-		},
-		cancel() {
-			try { trojanUDPContext.proxySocket?.close() } catch (e) { }
-			try { reader.releaseLock() } catch (e) { }
-		}
-	}), { status: 200, headers: responseHeaders });
+			},
+			cancel() {
+				try {
+					trojanUDPContext.proxySocket?.close();
+				} catch (e) {}
+				try {
+					reader.releaseLock();
+				} catch (e) {}
+			},
+		}),
+		{ status: 200, headers: responseHeaders }
+	);
 }
-
 
 export function getValidDataLength(data) {
 	if (!data) return 0;
@@ -277,17 +364,18 @@ export function getValidDataLength(data) {
 	return 0;
 }
 
-
 export function invalidateTCPConnectorGeneration(remoteConnWrapper) {
 	if (!remoteConnWrapper) return;
-	remoteConnWrapper.generation = (Number.isInteger(remoteConnWrapper.generation) ? remoteConnWrapper.generation : 0) + 1;
+	remoteConnWrapper.generation =
+		(Number.isInteger(remoteConnWrapper.generation) ? remoteConnWrapper.generation : 0) + 1;
 	const socket = remoteConnWrapper.socket;
 	remoteConnWrapper.socket = null;
 	remoteConnWrapper.downlinkController = null;
 	remoteConnWrapper.downlinkDrain = Promise.resolve();
-	try { socket?.close?.() } catch (e) { }
+	try {
+		socket?.close?.();
+	} catch (e) {}
 }
-
 
 export function startTCPConnectorGeneration(remoteConnWrapper) {
 	if (!Number.isInteger(remoteConnWrapper.generation)) remoteConnWrapper.generation = 0;
@@ -298,16 +386,20 @@ export function startTCPConnectorGeneration(remoteConnWrapper) {
 	remoteConnWrapper.downlinkController = null;
 	const previousDrain = remoteConnWrapper.downlinkDrain || Promise.resolve();
 	let currentDrain;
-	try { currentDrain = previousDownlink?.stopAndFlush?.() || Promise.resolve() }
-	catch (error) { currentDrain = Promise.reject(error) }
+	try {
+		currentDrain = previousDownlink?.stopAndFlush?.() || Promise.resolve();
+	} catch (error) {
+		currentDrain = Promise.reject(error);
+	}
 	const downlinkDrain = Promise.all([previousDrain, currentDrain]);
 	// Installation awaits this promise; attach a handler immediately in case draining fails before dialing completes.
-	downlinkDrain.catch(() => { });
+	downlinkDrain.catch(() => {});
 	remoteConnWrapper.downlinkDrain = downlinkDrain;
-	try { previousSocket?.close?.() } catch (e) { }
+	try {
+		previousSocket?.close?.();
+	} catch (e) {}
 	return { generation, downlinkDrain };
 }
-
 
 export async function readXHTTPFirstPacket(reader, token) {
 	const decoder = vlessTextDecoder;
@@ -341,7 +433,9 @@ export async function readXHTTPFirstPacket(reader, token) {
 			if (length < addressIndex + 1) return { status: 'need_more' };
 			const domainLen = data[addressIndex];
 			if (length < addressIndex + 1 + domainLen) return { status: 'need_more' };
-			hostname = decoder.decode(data.subarray(addressIndex + 1, addressIndex + 1 + domainLen));
+			hostname = decoder.decode(
+				data.subarray(addressIndex + 1, addressIndex + 1 + domainLen)
+			);
 			headerLen = addressIndex + 1 + domainLen;
 		} else if (addressType === 3) {
 			if (length < addressIndex + 16) return { status: 'need_more' };
@@ -366,7 +460,7 @@ export async function readXHTTPFirstPacket(reader, token) {
 				rawData: data.subarray(headerLen),
 				respHeader: new Uint8Array([data[0], 0]),
 				rawData: null,
-			}
+			},
 		};
 	};
 
@@ -428,7 +522,7 @@ export async function readXHTTPFirstPacket(reader, token) {
 				rawData: data.subarray(dataOffset),
 				rawData: data,
 				respHeader: null,
-			}
+			},
 		};
 	};
 
@@ -444,7 +538,9 @@ export async function readXHTTPFirstPacket(reader, token) {
 
 		const chunk = value instanceof Uint8Array ? value : new Uint8Array(value);
 		if (offset + chunk.byteLength > buffer.byteLength) {
-			const newBuffer = new Uint8Array(Math.max(buffer.byteLength * 2, offset + chunk.byteLength));
+			const newBuffer = new Uint8Array(
+				Math.max(buffer.byteLength * 2, offset + chunk.byteLength)
+			);
 			newBuffer.set(buffer.subarray(0, offset));
 			buffer = newBuffer;
 		}

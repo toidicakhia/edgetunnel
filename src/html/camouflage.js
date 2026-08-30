@@ -31,14 +31,26 @@ export async function nginx() {
 	<p><em>ThankYou for usingNginx.</em></p>
 	</body>
 	</html>
-	`
+	`;
 }
-
 
 export async function html1101(host, accessIP) {
 	const now = new Date();
-	const formattedTimestamp = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0') + ' ' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0');
-	const randomstr = Array.from(crypto.getRandomValues(new Uint8Array(8))).map(b => b.toString(16).padStart(2, '0')).join('');
+	const formattedTimestamp =
+		now.getFullYear() +
+		'-' +
+		String(now.getMonth() + 1).padStart(2, '0') +
+		'-' +
+		String(now.getDate()).padStart(2, '0') +
+		' ' +
+		String(now.getHours()).padStart(2, '0') +
+		':' +
+		String(now.getMinutes()).padStart(2, '0') +
+		':' +
+		String(now.getSeconds()).padStart(2, '0');
+	const randomstr = Array.from(crypto.getRandomValues(new Uint8Array(8)))
+		.map((b) => b.toString(16).padStart(2, '0'))
+		.join('');
 
 	return `<!DOCTYPE html>
 <!--[if ltIE7]> <html class="no-js ie6 oldie" lang="en-US"> <![endif]-->

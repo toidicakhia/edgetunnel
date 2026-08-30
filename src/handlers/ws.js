@@ -3,14 +3,32 @@
  * Auto-generated from _worker.js refactor
  * Original: edgetunnel 2.1 (2026-08-11)
  */
-import { uplinkQueueMaxBytes, uplinkQueueMaxEntries, wsMaxEarlyDataBytes, wsMaxEarlyHeaderLength } from '../constants.js';
-import { SSAEADDecrypt, SSAEADEncrypt, SSDeriveMasterKey, SSDeriveSessionKey, SS_AEAD_TAG_LENGTH, SS_NONCE_LENGTH, SS_SUPPORTED_CIPHERS, forwardTrojanUDPData, parseTrojanRequest, parseVLESSRequest, ssTextDecoder, uuidBytesMatch, vlessTextDecoder } from '../core/protocol.js';
+import {
+	uplinkQueueMaxBytes,
+	uplinkQueueMaxEntries,
+	wsMaxEarlyDataBytes,
+	wsMaxEarlyHeaderLength,
+} from '../constants.js';
+import {
+	SSAEADDecrypt,
+	SSAEADEncrypt,
+	SSDeriveMasterKey,
+	SSDeriveSessionKey,
+	SS_AEAD_TAG_LENGTH,
+	SS_NONCE_LENGTH,
+	SS_SUPPORTED_CIPHERS,
+	forwardTrojanUDPData,
+	parseTrojanRequest,
+	parseVLESSRequest,
+	ssTextDecoder,
+	uuidBytesMatch,
+	vlessTextDecoder,
+} from '../core/protocol.js';
 import { buildWSLocal204Response, createUplinkWriteQueue, isSpeedTestSite } from '../core/grain.js';
 import { closeSocketQuietly, forwardTCP, forwardUDP, webSocketSendAndAwait } from '../core/tcp.js';
 import { concatByteData, log, toUint8Array } from '../utils/helpers.js';
 import { getValidDataLength, invalidateTCPConnectorGeneration } from './xhttp.js';
 import { sha224 } from '../utils/crypto.js';
-
 
 export function isValidWSEarlyData(bytes, token) {
 	if (!bytes?.byteLength) return false;
@@ -24,7 +42,6 @@ export function isValidWSEarlyData(bytes, token) {
 	return true;
 }
 
-
 export function decodeWSEarlyData(header, token) {
 	if (!header) return null;
 	if (header.length > wsMaxEarlyHeaderLength) throw new Error('early data is too large');
@@ -34,7 +51,7 @@ export function decodeWSEarlyData(header, token) {
 	if (typeof Uint8ArrayBase64.fromBase64 === 'function') {
 		try {
 			bytes = Uint8ArrayBase64.fromBase64(header, { alphabet: 'base64url' });
-		} catch (_) { }
+		} catch (_) {}
 	}
 	if (!bytes) {
 		let normalized = header.replace(/-/g, '+').replace(/_/g, '/');
@@ -59,23 +76,41 @@ export function decodeWSEarlyData(header, token) {
 export async function handleWSRequest(request, yourUUID, url, proxyContext = {}) {
 	const wsSocketPair = new WebSocketPair();
 	const [clientSock, serverSock] = Object.values(wsSocketPair);
-	try { (/** @type {any} */ (serverSock)).accept({ allowHalfOpen: true }) }
-	catch (_) { serverSock.accept() }
+	try {
+		/** @type {any} */ (serverSock).accept({ allowHalfOpen: true });
+	} catch (_) {
+		serverSock.accept();
+	}
 	serverSock.binaryType = 'arraybuffer';
-	let remoteConnWrapper = { socket: null, connectingPromise: null, retryConnect: null, downlinkDrain: Promise.resolve() };
+	let remoteConnWrapper = {
+		socket: null,
+		connectingPromise: null,
+		retryConnect: null,
+		downlinkDrain: Promise.resolve(),
+	};
 	const invalidateRemote = () => invalidateTCPConnectorGeneration(remoteConnWrapper);
 	let isDnsQuery = false;
 	let isTrojan = null;
-	const trojanUDPContext = { buffer: new Uint8Array(0), proxyAddress: proxyContext.trojanProxyAddress };
+	const trojanUDPContext = {
+		buffer: new Uint8Array(0),
+		proxyAddress: proxyContext.trojanProxyAddress,
+	};
 	const earlyDataHeader = request.headers.get('sec-websocket-protocol') || '';
 	const ssModeDisableEarlyData = !!url.searchParams.get('enc');
 	let wsUplinkWriteQueue = null;
 	let wsExplicitTransferChain = Promise.resolve();
-	let wsExplicitTransferStopReceiving = false, wsExplicitTransferFailed = false, wsExplicitTransferFinishingEnqueued = false;
-	let wsExplicitQueueBytes = 0, wsExplicitQueueEntries = 0;
-	let determineProtocolType = null, currentWriteSocket = null, remoteWriter = null;
-	let ssContext = null, ssInitTask = null;
-	let wsLocalSpeedTestMode = false, wsLocalSpeedTestResponseSocket = null;
+	let wsExplicitTransferStopReceiving = false,
+		wsExplicitTransferFailed = false,
+		wsExplicitTransferFinishingEnqueued = false;
+	let wsExplicitQueueBytes = 0,
+		wsExplicitQueueEntries = 0;
+	let determineProtocolType = null,
+		currentWriteSocket = null,
+		remoteWriter = null;
+	let ssContext = null,
+		ssInitTask = null;
+	let wsLocalSpeedTestMode = false,
+		wsLocalSpeedTestResponseSocket = null;
 	let wsLocalSpeedTestRequestCache = new Uint8Array(0);
 	let wsLocalSpeedTestFirstPacketResponseHeader = null;
 	const wsLocalSpeedTestRequestLimit = 64 * 1024;
@@ -84,12 +119,21 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 		if (!wsLocalSpeedTestResponseSocket) return;
 		const respHeader = wsLocalSpeedTestFirstPacketResponseHeader;
 		wsLocalSpeedTestFirstPacketResponseHeader = null;
-		await webSocketSendAndAwait(wsLocalSpeedTestResponseSocket, buildWSLocal204Response(respHeader));
+		await webSocketSendAndAwait(
+			wsLocalSpeedTestResponseSocket,
+			buildWSLocal204Response(respHeader)
+		);
 	};
 
 	const findHTTPRequestHeaderEnd = (data) => {
 		for (let i = 0; i <= data.byteLength - 4; i++) {
-			if (data[i] === 0x0d && data[i + 1] === 0x0a && data[i + 2] === 0x0d && data[i + 3] === 0x0a) return i + 4;
+			if (
+				data[i] === 0x0d &&
+				data[i + 1] === 0x0a &&
+				data[i + 2] === 0x0d &&
+				data[i + 3] === 0x0a
+			)
+				return i + 4;
 		}
 		return -1;
 	};
@@ -97,40 +141,57 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 	const handleWSLocalSpeedTestData = async (data) => {
 		const chunk = toUint8Array(data);
 		if (!chunk.byteLength) return;
-		if (wsLocalSpeedTestRequestCache.byteLength + chunk.byteLength > wsLocalSpeedTestRequestLimit) throw new Error('WS local speed-test request is too large');
+		if (
+			wsLocalSpeedTestRequestCache.byteLength + chunk.byteLength >
+			wsLocalSpeedTestRequestLimit
+		)
+			throw new Error('WS local speed-test request is too large');
 		wsLocalSpeedTestRequestCache = concatByteData(wsLocalSpeedTestRequestCache, chunk);
 
 		while (wsLocalSpeedTestRequestCache.byteLength) {
 			const headerEnd = findHTTPRequestHeaderEnd(wsLocalSpeedTestRequestCache);
 			if (headerEnd === -1) return;
-			const headerText = vlessTextDecoder.decode(wsLocalSpeedTestRequestCache.subarray(0, headerEnd));
+			const headerText = vlessTextDecoder.decode(
+				wsLocalSpeedTestRequestCache.subarray(0, headerEnd)
+			);
 			const contentLengthMatch = headerText.match(/(?:^|\r\n)content-length\s*:\s*(\d+)/i);
 			const contentLength = contentLengthMatch ? Number(contentLengthMatch[1]) : 0;
 			const requestLength = headerEnd + contentLength;
-			if (!Number.isSafeInteger(contentLength) || requestLength > wsLocalSpeedTestRequestLimit) throw new Error('WS local speed-test request body is too large');
+			if (
+				!Number.isSafeInteger(contentLength) ||
+				requestLength > wsLocalSpeedTestRequestLimit
+			)
+				throw new Error('WS local speed-test request body is too large');
 			if (wsLocalSpeedTestRequestCache.byteLength < requestLength) return;
 			wsLocalSpeedTestRequestCache = wsLocalSpeedTestRequestCache.slice(requestLength);
 			await sendWSLocalSpeedTestResponse();
 		}
 	};
 
-	const enableWSLocalSpeedTestMode = async (responseSocket, respHeader = null, firstRequestData = null) => {
+	const enableWSLocalSpeedTestMode = async (
+		responseSocket,
+		respHeader = null,
+		firstRequestData = null
+	) => {
 		wsLocalSpeedTestMode = true;
 		wsLocalSpeedTestResponseSocket = responseSocket;
 		wsLocalSpeedTestRequestCache = new Uint8Array(0);
 		wsLocalSpeedTestFirstPacketResponseHeader = respHeader;
-		if (getValidDataLength(firstRequestData) > 0) await handleWSLocalSpeedTestData(firstRequestData);
+		if (getValidDataLength(firstRequestData) > 0)
+			await handleWSLocalSpeedTestData(firstRequestData);
 	};
 
 	const releaseRemoteWriter = () => {
 		if (remoteWriter) {
-			try { remoteWriter.releaseLock() } catch (e) { }
+			try {
+				remoteWriter.releaseLock();
+			} catch (e) {}
 			remoteWriter = null;
 		}
 		currentWriteSocket = null;
 	};
 
-	const uplinkWriteQueue = wsUplinkWriteQueue = createUplinkWriteQueue({
+	const uplinkWriteQueue = (wsUplinkWriteQueue = createUplinkWriteQueue({
 		getWriter: () => {
 			const socket = remoteConnWrapper.socket;
 			if (!socket) return null;
@@ -144,12 +205,13 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 		getConnectionTask: () => remoteConnWrapper.connectingPromise,
 		releaseWriter: releaseRemoteWriter,
 		retryConnection: async () => {
-			if (typeof remoteConnWrapper.retryConnect !== 'function') throw new Error('retry unavailable');
+			if (typeof remoteConnWrapper.retryConnect !== 'function')
+				throw new Error('retry unavailable');
 			await remoteConnWrapper.retryConnect();
 		},
-		closeConnection: err => handleWSExplicitTransferError(err),
-		name: 'WSuplink'
-	});
+		closeConnection: (err) => handleWSExplicitTransferError(err),
+		name: 'WSuplink',
+	}));
 
 	const writeToRemote = async (chunk, allowRetry = true) => {
 		return uplinkWriteQueue.write(chunk, allowRetry);
@@ -160,11 +222,22 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 		if (!ssInitTask) {
 			ssInitTask = (async () => {
 				const requestCipherMethod = (url.searchParams.get('enc') || '').toLowerCase();
-				const preferredCipherConfig = SS_SUPPORTED_CIPHERS[requestCipherMethod] || SS_SUPPORTED_CIPHERS['aes-128-gcm'];
-				const inboundCandidateCipherConfigs = [preferredCipherConfig, ...Object.values(SS_SUPPORTED_CIPHERS).filter(c => c.method !== preferredCipherConfig.method)];
+				const preferredCipherConfig =
+					SS_SUPPORTED_CIPHERS[requestCipherMethod] ||
+					SS_SUPPORTED_CIPHERS['aes-128-gcm'];
+				const inboundCandidateCipherConfigs = [
+					preferredCipherConfig,
+					...Object.values(SS_SUPPORTED_CIPHERS).filter(
+						(c) => c.method !== preferredCipherConfig.method
+					),
+				];
 				const inboundMasterKeyTaskBuffer = new Map();
 				const getInboundMasterKeyTask = (config) => {
-					if (!inboundMasterKeyTaskBuffer.has(config.method)) inboundMasterKeyTaskBuffer.set(config.method, SSDeriveMasterKey(yourUUID, config.keyLen));
+					if (!inboundMasterKeyTaskBuffer.has(config.method))
+						inboundMasterKeyTaskBuffer.set(
+							config.method,
+							SSDeriveMasterKey(yourUUID, config.keyLen)
+						);
 					return inboundMasterKeyTaskBuffer.get(config.method);
 				};
 				const inboundState = {
@@ -177,45 +250,85 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 				};
 				const initInboundDecryptState = async () => {
 					const lengthCipherTotalLength = 2 + SS_AEAD_TAG_LENGTH;
-					const maxSaltLen = Math.max(...inboundCandidateCipherConfigs.map(c => c.saltLen));
+					const maxSaltLen = Math.max(
+						...inboundCandidateCipherConfigs.map((c) => c.saltLen)
+					);
 					const maxAlignScanBytes = 16;
-					const maxScannableOffset = Math.min(maxAlignScanBytes, Math.max(0, inboundState.buffer.byteLength - (lengthCipherTotalLength + Math.min(...inboundCandidateCipherConfigs.map(c => c.saltLen)))));
+					const maxScannableOffset = Math.min(
+						maxAlignScanBytes,
+						Math.max(
+							0,
+							inboundState.buffer.byteLength -
+								(lengthCipherTotalLength +
+									Math.min(
+										...inboundCandidateCipherConfigs.map((c) => c.saltLen)
+									))
+						)
+					);
 					for (let offset = 0; offset <= maxScannableOffset; offset++) {
 						for (const cipherConfig of inboundCandidateCipherConfigs) {
-							const initMinLength = offset + cipherConfig.saltLen + lengthCipherTotalLength;
+							const initMinLength =
+								offset + cipherConfig.saltLen + lengthCipherTotalLength;
 							if (inboundState.buffer.byteLength < initMinimumLength) continue;
-							const salt = inboundState.buffer.subarray(offset, offset + cipherConfig.saltLen);
-							const lengthCipher = inboundState.buffer.subarray(offset + cipherConfig.saltLen, initMinimumLength);
+							const salt = inboundState.buffer.subarray(
+								offset,
+								offset + cipherConfig.saltLen
+							);
+							const lengthCipher = inboundState.buffer.subarray(
+								offset + cipherConfig.saltLen,
+								initMinimumLength
+							);
 							const masterKey = await getInboundMasterKeyTask(cipherConfig);
-							const decryptKey = await SSDeriveSessionKey(cipherConfig, masterKey, salt, ['decrypt']);
+							const decryptKey = await SSDeriveSessionKey(
+								cipherConfig,
+								masterKey,
+								salt,
+								['decrypt']
+							);
 							const nonceCounter = new Uint8Array(SS_NONCE_LENGTH);
 							try {
-								const lengthPlain = await SSAEADDecrypt(decryptKey, nonceCounter, lengthCipher);
+								const lengthPlain = await SSAEADDecrypt(
+									decryptKey,
+									nonceCounter,
+									lengthCipher
+								);
 								if (lengthPlain.byteLength !== 2) continue;
 								const payloadLength = (lengthPlain[0] << 8) | lengthPlain[1];
-								if (payloadLength < 0 || payloadLength > cipherConfig.maxChunk) continue;
-								if (offset > 0) log(`[SS Inbound] leading noise detected ${offset}B，autoAligned`);
-								if (cipherConfig.method !== preferredCipherConfig.method) log(`[SS Inbound] URL enc=${requestCipherMethod || preferredCipherConfig.method} actual ${cipherConfig.method} inconsistent，autoSwitched`);
-								inboundState.buffer = inboundState.buffer.subarray(initMinimumLength);
+								if (payloadLength < 0 || payloadLength > cipherConfig.maxChunk)
+									continue;
+								if (offset > 0)
+									log(
+										`[SS Inbound] leading noise detected ${offset}B，autoAligned`
+									);
+								if (cipherConfig.method !== preferredCipherConfig.method)
+									log(
+										`[SS Inbound] URL enc=${requestCipherMethod || preferredCipherConfig.method} actual ${cipherConfig.method} inconsistent，autoSwitched`
+									);
+								inboundState.buffer =
+									inboundState.buffer.subarray(initMinimumLength);
 								inboundState.decryptKey = decryptKey;
 								inboundState.nonceCounter = nonceCounter;
 								inboundState.waitPayloadLength = payloadLength;
 								inboundState.cipherConfig = cipherConfig;
 								inboundState.hasSalt = true;
 								return true;
-							} catch (_) { }
+							} catch (_) {}
 						}
 					}
-					const initFailureThresholdLength = maxSaltLength + lengthCipherTotalLength + maxAlignScanBytes;
+					const initFailureThresholdLength =
+						maxSaltLength + lengthCipherTotalLength + maxAlignScanBytes;
 					if (inboundState.buffer.byteLength >= initFailureThresholdlength) {
-						throw new Error(`SS handshake decrypt failed (enc=${requestCipherMethod || 'auto'}, candidates=${inboundCandidateCipherConfigs.map(c => c.method).join('/')})`);
+						throw new Error(
+							`SS handshake decrypt failed (enc=${requestCipherMethod || 'auto'}, candidates=${inboundCandidateCipherConfigs.map((c) => c.method).join('/')})`
+						);
 					}
 					return false;
 				};
 				const inboundDecryptor = {
 					async input(dataChunk) {
 						const chunk = toUint8Array(dataChunk);
-						if (chunk.byteLength > 0) inboundState.buffer = concatByteData(inboundState.buffer, chunk);
+						if (chunk.byteLength > 0)
+							inboundState.buffer = concatByteData(inboundState.buffer, chunk);
 						if (!inboundState.hasSalt) {
 							const initSucceeded = await initInboundDecryptState();
 							if (!initSucceeded) return [];
@@ -225,19 +338,41 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 							if (inboundState.waitPayloadLength === null) {
 								const lengthCipherTotalLength = 2 + SS_AEAD_TAG_LENGTH;
 								if (inboundState.buffer.byteLength < lengthCipherTotalLength) break;
-								const lengthCipher = inboundState.buffer.subarray(0, lengthCipherTotalLength);
-								inboundState.buffer = inboundState.buffer.subarray(lengthCipherTotalLength);
-								const lengthPlain = await SSAEADDecrypt(inboundState.decryptKey, inboundState.nonceCounter, lengthCipher);
-								if (lengthPlain.byteLength !== 2) throw new Error('SS length decrypt failed');
+								const lengthCipher = inboundState.buffer.subarray(
+									0,
+									lengthCipherTotalLength
+								);
+								inboundState.buffer =
+									inboundState.buffer.subarray(lengthCipherTotalLength);
+								const lengthPlain = await SSAEADDecrypt(
+									inboundState.decryptKey,
+									inboundState.nonceCounter,
+									lengthCipher
+								);
+								if (lengthPlain.byteLength !== 2)
+									throw new Error('SS length decrypt failed');
 								const payloadLength = (lengthPlain[0] << 8) | lengthPlain[1];
-								if (payloadLength < 0 || payloadLength > inboundState.cipherConfig.maxChunk) throw new Error(`SS payload length invalid: ${payloadLength}`);
+								if (
+									payloadLength < 0 ||
+									payloadLength > inboundState.cipherConfig.maxChunk
+								)
+									throw new Error(`SS payload length invalid: ${payloadLength}`);
 								inboundState.waitPayloadLength = payloadLength;
 							}
-							const payloadCipherTotalLength = inboundState.waitPayloadLength + SS_AEAD_TAG_LENGTH;
+							const payloadCipherTotalLength =
+								inboundState.waitPayloadLength + SS_AEAD_TAG_LENGTH;
 							if (inboundState.buffer.byteLength < payloadCipherTotalLength) break;
-							const payloadCipher = inboundState.buffer.subarray(0, payloadCipherTotalLength);
-							inboundState.buffer = inboundState.buffer.subarray(payloadCipherTotalLength);
-							const payloadPlain = await SSAEADDecrypt(inboundState.decryptKey, inboundState.nonceCounter, payloadCipher);
+							const payloadCipher = inboundState.buffer.subarray(
+								0,
+								payloadCipherTotalLength
+							);
+							inboundState.buffer =
+								inboundState.buffer.subarray(payloadCipherTotalLength);
+							const payloadPlain = await SSAEADDecrypt(
+								inboundState.decryptKey,
+								inboundState.nonceCounter,
+								payloadCipher
+							);
 							plaintextChunks.push(payloadPlain);
 							inboundState.waitPayloadLength = null;
 						}
@@ -250,9 +385,19 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 					if (outboundEncryptor) return outboundEncryptor;
 					if (!inboundState.cipherConfig) throw new Error('SS cipher is not negotiated');
 					const outboundCipherConfig = inboundState.cipherConfig;
-					const outboundMasterKey = await SSDeriveMasterKey(yourUUID, outboundcipherConfig.keyLen);
-					const outboundRandomBytes = crypto.getRandomValues(new Uint8Array(outboundcipherConfig.saltLen));
-					const outboundCipherKey = await SSDeriveSessionKey(outboundcipherConfig, outboundMasterKey, outboundRandomBytes, ['encrypt']);
+					const outboundMasterKey = await SSDeriveMasterKey(
+						yourUUID,
+						outboundcipherConfig.keyLen
+					);
+					const outboundRandomBytes = crypto.getRandomValues(
+						new Uint8Array(outboundcipherConfig.saltLen)
+					);
+					const outboundCipherKey = await SSDeriveSessionKey(
+						outboundcipherConfig,
+						outboundMasterKey,
+						outboundRandomBytes,
+						['encrypt']
+					);
 					const outboundNonceCounter = new Uint8Array(SS_NONCE_LENGTH);
 					let randomBytesSent = false;
 					outboundEncryptor = {
@@ -265,14 +410,27 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 							if (plaintextData.byteLength === 0) return;
 							let offset = 0;
 							while (offset < plaintextData.byteLength) {
-								const end = Math.min(offset + outboundcipherConfig.maxChunk, plaintextData.byteLength);
+								const end = Math.min(
+									offset + outboundcipherConfig.maxChunk,
+									plaintextData.byteLength
+								);
 								const payloadPlain = plaintextData.subarray(offset, end);
 								const lengthPlain = new Uint8Array(2);
 								lengthPlain[0] = (payloadPlain.byteLength >>> 8) & 0xff;
 								lengthPlain[1] = payloadPlain.byteLength & 0xff;
-								const lengthCipher = await SSAEADEncrypt(outboundCipherKey, outboundNonceCounter, lengthPlain);
-								const payloadCipher = await SSAEADEncrypt(outboundCipherKey, outboundNonceCounter, payloadPlain);
-								const frame = new Uint8Array(lengthCipher.byteLength + payloadCipher.byteLength);
+								const lengthCipher = await SSAEADEncrypt(
+									outboundCipherKey,
+									outboundNonceCounter,
+									lengthPlain
+								);
+								const payloadCipher = await SSAEADEncrypt(
+									outboundCipherKey,
+									outboundNonceCounter,
+									payloadPlain
+								);
+								const frame = new Uint8Array(
+									lengthCipher.byteLength + payloadCipher.byteLength
+								);
 								frame.set(lengthCipher, 0);
 								frame.set(payloadCipher, lengthCipher.byteLength);
 								await sendChunk(frame);
@@ -287,11 +445,17 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 					SSsendqueue = SSsendqueue.then(async () => {
 						if (serverSock.readyState !== WebSocket.OPEN) return;
 						const initializedOutboundEncryptor = await getOutboundEncryptor();
-						await initializedOutboundEncryptor.encryptAndsend(chunk, async (encryptedChunk) => {
-							if (encryptedChunk.byteLength > 0 && serverSock.readyState === WebSocket.OPEN) {
-								await webSocketSendAndAwait(serverSock, encryptedChunk.buffer);
+						await initializedOutboundEncryptor.encryptAndsend(
+							chunk,
+							async (encryptedChunk) => {
+								if (
+									encryptedChunk.byteLength > 0 &&
+									serverSock.readyState === WebSocket.OPEN
+								) {
+									await webSocketSendAndAwait(serverSock, encryptedChunk.buffer);
+								}
 							}
-						});
+						);
 					}).catch((error) => {
 						log(`[SSsend] encryption failed: ${error?.message || error}`);
 						closeSocketQuietly(serverSock);
@@ -308,13 +472,18 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 							return SSenqueuesend(chunk);
 						}
 						for (let i = 0; i < chunk.byteLength; i += SSsingleBatchMaxbytes) {
-							SSenqueuesend(chunk.subarray(i, Math.min(i + SSsingleBatchMaxbytes, chunk.byteLength)));
+							SSenqueuesend(
+								chunk.subarray(
+									i,
+									Math.min(i + SSsingleBatchMaxbytes, chunk.byteLength)
+								)
+							);
 						}
 						return SSsendqueue;
 					},
 					close() {
 						closeSocketQuietly(serverSock);
-					}
+					},
 				};
 				ssContext = {
 					inboundDecryptor,
@@ -324,7 +493,9 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 					targetPort: 0,
 				};
 				return ssContext;
-			})().finally(() => { ssInitTask = null });
+			})().finally(() => {
+				ssInitTask = null;
+			});
 		}
 		return ssInitTask;
 	};
@@ -336,7 +507,11 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			plaintextChunks = await context.inboundDecryptor.input(chunk);
 		} catch (err) {
 			const msg = err?.message || `${err}`;
-			if (msg.includes('Decryption failed') || msg.includes('SS handshake decrypt failed') || msg.includes('SS length decrypt failed')) {
+			if (
+				msg.includes('Decryption failed') ||
+				msg.includes('SS handshake decrypt failed') ||
+				msg.includes('SS length decrypt failed')
+			) {
 				log(`[SS Inbound] decryption failed，connection closed: ${msg}`);
 				closeSocketQuietly(serverSock);
 				return;
@@ -352,12 +527,22 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			try {
 				wasWritten = await writeToRemote(plaintextChunk, false);
 			} catch (err) {
-				if ((/** @type {any} */ (err))?.isQueueOverflow) throw err;
+				if (/** @type {any} */ (err)?.isQueueOverflow) throw err;
 				wasWritten = false;
 			}
 			if (wasWritten) continue;
 			if (context.firstPacketEstablished && context.targetHost && context.targetPort > 0) {
-				await forwardTCP(context.targetHost, context.targetPort, plaintextChunk, context.responseSocket, null, remoteConnWrapper, yourUUID, request, proxyContext);
+				await forwardTCP(
+					context.targetHost,
+					context.targetPort,
+					plaintextChunk,
+					context.responseSocket,
+					null,
+					remoteConnWrapper,
+					yourUUID,
+					request,
+					proxyContext
+				);
 				continue;
 			}
 			const plaintextData = toUint8Array(plaintextChunk);
@@ -366,20 +551,30 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			let cursor = 1;
 			let hostname = '';
 			if (addressType === 1) {
-				if (plaintextData.byteLength < cursor + 4 + 2) throw new Error('invalid ss ipv4 length');
+				if (plaintextData.byteLength < cursor + 4 + 2)
+					throw new Error('invalid ss ipv4 length');
 				hostname = `${plaintextData[cursor]}.${plaintextData[cursor + 1]}.${plaintextData[cursor + 2]}.${plaintextData[cursor + 3]}`;
 				cursor += 4;
 			} else if (addressType === 3) {
-				if (plaintextData.byteLength < cursor + 1) throw new Error('invalid ss domain length');
+				if (plaintextData.byteLength < cursor + 1)
+					throw new Error('invalid ss domain length');
 				const domainLength = plaintextData[cursor];
 				cursor += 1;
-				if (plaintextData.byteLength < cursor + domainLength + 2) throw new Error('invalid ss domain data');
-				hostname = ssTextDecoder.decode(plaintextData.subarray(cursor, cursor + domainLength));
+				if (plaintextData.byteLength < cursor + domainLength + 2)
+					throw new Error('invalid ss domain data');
+				hostname = ssTextDecoder.decode(
+					plaintextData.subarray(cursor, cursor + domainLength)
+				);
 				cursor += domainLength;
 			} else if (addressType === 4) {
-				if (plaintextData.byteLength < cursor + 16 + 2) throw new Error('invalid ss ipv6 length');
+				if (plaintextData.byteLength < cursor + 16 + 2)
+					throw new Error('invalid ss ipv6 length');
 				const ipv6 = [];
-				const ipv6View = new DataView(plaintextData.buffer, plaintextData.byteOffset + cursor, 16);
+				const ipv6View = new DataView(
+					plaintextData.buffer,
+					plaintextData.byteOffset + cursor,
+					16
+				);
 				for (let i = 0; i < 8; i++) ipv6.push(ipv6View.getUint16(i * 2).toString(16));
 				hostname = ipv6.join(':');
 				cursor += 16;
@@ -397,14 +592,25 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			context.firstPacketEstablished = true;
 			context.targetHost = hostname;
 			context.targetPort = port;
-			await forwardTCP(hostname, port, rawClientData, context.responseSocket, null, remoteConnWrapper, yourUUID, request, proxyContext);
+			await forwardTCP(
+				hostname,
+				port,
+				rawClientData,
+				context.responseSocket,
+				null,
+				remoteConnWrapper,
+				yourUUID,
+				request,
+				proxyContext
+			);
 		}
 	};
 
 	const handleWSInboundData = async (chunk) => {
 		let currentChunkBytes = null;
 		if (isDnsQuery) {
-			if (isTrojan) return await forwardTrojanUDPData(chunk, serverSock, trojanUDPContext, request);
+			if (isTrojan)
+				return await forwardTrojanUDPData(chunk, serverSock, trojanUDPContext, request);
 			return await forwardUDP(chunk, serverSock, null, request);
 		}
 		if (determineProtocolType === 'ss') {
@@ -422,10 +628,15 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			else {
 				currentChunkBytes = currentChunkBytes || toUint8Array(chunk);
 				const bytes = currentChunkBytes;
-				determineProtocolType = bytes.byteLength >= 58 && bytes[56] === 0x0d && bytes[57] === 0x0a ? 'trojan' : 'VLESS';
+				determineProtocolType =
+					bytes.byteLength >= 58 && bytes[56] === 0x0d && bytes[57] === 0x0a
+						? 'trojan'
+						: 'VLESS';
 			}
 			isTrojan = determineProtocolType === 'trojan';
-			log(`[WSforward] protocolType: ${determineProtocolType} | from: ${url.host} | UA: ${request.headers.get('user-agent') || 'unknown'}`);
+			log(
+				`[WSforward] protocolType: ${determineProtocolType} | from: ${url.host} | UA: ${request.headers.get('user-agent') || 'unknown'}`
+			);
 		}
 
 		if (determineProtocolType === 'ss') {
@@ -435,7 +646,8 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 		if (await writeToRemote(chunk)) return;
 		if (determineProtocolType === 'trojan') {
 			const parseResult = parseTrojanRequest(chunk, yourUUID);
-			if (parseresult?.hasError) throw new Error(parseresult.message || 'Invalid trojan request');
+			if (parseresult?.hasError)
+				throw new Error(parseresult.message || 'Invalid trojan request');
 			const { port, hostname, rawClientData, isUDP } = parseresult;
 			if (isSpeedTestSite(hostname) && proxyContext.proxyType === null) {
 				await enableWSLocalSpeedTestMode(serverSock, null, rawClientData);
@@ -445,17 +657,42 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 				isDnsQuery = true;
 				trojanUDPContext.targetHost = hostname;
 				trojanUDPContext.targetPort = port;
-				if (trojanUDPContext.proxyAddress) return forwardTrojanUDPData(currentChunkBytes || toUint8Array(chunk), serverSock, trojanUDPContext, request);
-				if (getValidDataLength(rawClientData) > 0) return forwardTrojanUDPData(rawClientData, serverSock, trojanUDPContext, request);
+				if (trojanUDPContext.proxyAddress)
+					return forwardTrojanUDPData(
+						currentChunkBytes || toUint8Array(chunk),
+						serverSock,
+						trojanUDPContext,
+						request
+					);
+				if (getValidDataLength(rawClientData) > 0)
+					return forwardTrojanUDPData(
+						rawClientData,
+						serverSock,
+						trojanUDPContext,
+						request
+					);
 				return;
 			}
-			await forwardTCP(hostname, port, rawClientData, serverSock, null, remoteConnWrapper, yourUUID, request, proxyContext, true, currentChunkBytes || toUint8Array(chunk));
+			await forwardTCP(
+				hostname,
+				port,
+				rawClientData,
+				serverSock,
+				null,
+				remoteConnWrapper,
+				yourUUID,
+				request,
+				proxyContext,
+				true,
+				currentChunkBytes || toUint8Array(chunk)
+			);
 		} else {
 			isTrojan = false;
 			currentChunkBytes = currentChunkBytes || toUint8Array(chunk);
 			const bytes = currentChunkBytes;
 			const parseResult = parseVLESSRequest(bytes, yourUUID);
-			if (parseresult?.hasError) throw new Error(parseresult.message || 'Invalid VLESS request');
+			if (parseresult?.hasError)
+				throw new Error(parseresult.message || 'Invalid VLESS request');
 			const { port, hostname, version, isUDP, rawClientData } = parseresult;
 			const respHeader = new Uint8Array([version, 0]);
 			if (isSpeedTestSite(hostname) && proxyContext.proxyType === null) {
@@ -468,10 +705,21 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			}
 			const rawData = rawClientData;
 			if (isDnsQuery) {
-				if (isTrojan) return forwardTrojanUDPData(rawData, serverSock, trojanUDPContext, request);
+				if (isTrojan)
+					return forwardTrojanUDPData(rawData, serverSock, trojanUDPContext, request);
 				return forwardUDP(rawData, serverSock, respHeader, request);
 			}
-			await forwardTCP(hostname, port, rawData, serverSock, respHeader, remoteConnWrapper, yourUUID, request, proxyContext);
+			await forwardTCP(
+				hostname,
+				port,
+				rawData,
+				serverSock,
+				respHeader,
+				remoteConnWrapper,
+				yourUUID,
+				request,
+				proxyContext
+			);
 		}
 	};
 
@@ -490,12 +738,16 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 		uplinkWriteQueue.clear();
 		releaseRemoteWriter();
 		invalidateRemote();
-		try { trojanUDPContext.proxySocket?.close() } catch (e) { }
+		try {
+			trojanUDPContext.proxySocket?.close();
+		} catch (e) {}
 		closeSocketQuietly(serverSock);
 	};
 
 	const appendWSExplicitTransferTask = (task) => {
-		wsExplicitTransferChain = wsExplicitTransferChain.then(task).catch(handleWSExplicitTransferError);
+		wsExplicitTransferChain = wsExplicitTransferChain
+			.then(task)
+			.catch(handleWSExplicitTransferError);
 		return wsExplicitTransferChain;
 	};
 
@@ -505,7 +757,9 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 		const nextBytes = wsExplicitQueueBytes + chunkSize;
 		const nextItems = wsExplicitQueueEntries + 1;
 		if (nextBytes > uplinkQueueMaxBytes || nextItems > uplinkQueueMaxEntries) {
-			handleWSExplicitTransferError(new Error(`[WSexplicit transfer] queue overflow: ${nextBytes}B/${nextItems}`));
+			handleWSExplicitTransferError(
+				new Error(`[WSexplicit transfer] queue overflow: ${nextBytes}B/${nextItems}`)
+			);
 			return;
 		}
 		wsExplicitQueueBytes = nextBytes;
@@ -527,7 +781,9 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			await uplinkWriteQueue.waitEmpty();
 			releaseRemoteWriter();
 			invalidateRemote();
-			try { trojanUDPContext.proxySocket?.close() } catch (e) { }
+			try {
+				trojanUDPContext.proxySocket?.close();
+			} catch (e) {}
 		});
 	};
 
@@ -552,5 +808,9 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 		}
 	}
 
-	return new Response(null, { status: 101, webSocket: clientSock, headers: { 'Sec-WebSocket-Extensions': '' } });
+	return new Response(null, {
+		status: 101,
+		webSocket: clientSock,
+		headers: { 'Sec-WebSocket-Extensions': '' },
+	});
 }
