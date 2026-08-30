@@ -93,27 +93,26 @@ export function pureMD5(string) {
 		a = addUnsigned(a, addUnsigned(addUnsigned(I(b, c, d), x), ac));
 		return addUnsigned(rotateLeft(a, s), b);
 	}
-	function convertToWordArray(string) {
-		let lWordCount;
-		const lMessageLength = string.length;
+	function convertBytesToWordArray(bytes) {
+		const lMessageLength = bytes.length;
 		const lNumberOfWords_temp1 = lMessageLength + 8;
 		const lNumberOfWords_temp2 = (lNumberOfWords_temp1 - (lNumberOfWords_temp1 % 64)) / 64;
 		const lNumberOfWords = (lNumberOfWords_temp2 + 1) * 16;
-		const lWordArray = Array(lNumberOfWords - 1);
+		const lWordArray = new Array(lNumberOfWords).fill(0);
 		let lBytePosition = 0;
 		let lByteCount = 0;
 		while (lByteCount < lMessageLength) {
-			lWordCount = (lByteCount - (lByteCount % 4)) / 4;
+			const lWordCount = (lByteCount - (lByteCount % 4)) / 4;
 			lBytePosition = (lByteCount % 4) * 8;
 			lWordArray[lWordCount] =
-				lWordArray[lWordCount] | (string.charCodeAt(lByteCount) << lBytePosition);
+				lWordArray[lWordCount] | (bytes[lByteCount] << lBytePosition);
 			lByteCount++;
 		}
-		lWordCount = (lByteCount - (lByteCount % 4)) / 4;
+		const lWordCount = (lByteCount - (lByteCount % 4)) / 4;
 		lBytePosition = (lByteCount % 4) * 8;
 		lWordArray[lWordCount] = lWordArray[lWordCount] | (0x80 << lBytePosition);
-		lWordArray[lNumberOfWords - 2] = lMessageLength << 3;
-		lWordArray[lNumberOfWords - 1] = lMessageLength >>> 29;
+		lWordArray[lNumberOfWords - 2] = (lMessageLength * 8) & 0xffffffff;
+		lWordArray[lNumberOfWords - 1] = Math.floor((lMessageLength * 8) / 0x100000000);
 		return lWordArray;
 	}
 	function wordToHex(lValue) {
@@ -130,7 +129,20 @@ export function pureMD5(string) {
 		return WordToHexValue;
 	}
 
-	const x = convertToWordArray(unescape(encodeURIComponent(string)));
+	let bytes;
+	if (string instanceof Uint8Array) {
+		bytes = string;
+	} else if (typeof string === 'string') {
+		bytes = new TextEncoder().encode(string);
+	} else if (string instanceof ArrayBuffer) {
+		bytes = new Uint8Array(string);
+	} else if (ArrayBuffer.isView(string)) {
+		bytes = new Uint8Array(string.buffer, string.byteOffset, string.byteLength);
+	} else {
+		bytes = new TextEncoder().encode(String(string || ''));
+	}
+
+	const x = convertBytesToWordArray(bytes);
 	let a = 0x67452301,
 		b = 0xefcdab89,
 		c = 0x98badcfe,

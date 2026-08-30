@@ -686,53 +686,6 @@ export default {
 									}
 								);
 							}
-						} else if (accessPath === 'admin/tg.json') {
-							// savetg.jsonconfig
-							try {
-								const newConfig = await request.json();
-								if (newConfig.init && newConfig.init === true) {
-									const TG_JSON = { BotToken: null, ChatID: null };
-									await env.KV.put('tg.json', JSON.stringify(TG_JSON, null, 2));
-								} else {
-									if (!newConfig.BotToken || !newConfig.ChatID)
-										return new Response(
-											JSON.stringify({ error: 'Config incomplete' }),
-											{
-												status: 400,
-												headers: {
-													'Content-Type':
-														'application/json;charset=utf-8',
-												},
-											}
-										);
-									await env.KV.put('tg.json', JSON.stringify(newConfig, null, 2));
-								}
-								ctx.waitUntil(
-									logRequest(env, request, accessIP, 'Save_Config', config_JSON)
-								);
-								return new Response(
-									JSON.stringify({ success: true, message: 'Config saved' }),
-									{
-										status: 200,
-										headers: {
-											'Content-Type': 'application/json;charset=utf-8',
-										},
-									}
-								);
-							} catch (error) {
-								console.error('Failed to save config:', error);
-								return new Response(
-									JSON.stringify({
-										error: 'Failed to save config: ' + error.message,
-									}),
-									{
-										status: 500,
-										headers: {
-											'Content-Type': 'application/json;charset=utf-8',
-										},
-									}
-								);
-							}
 						} else if (caseSensitiveAccessPath === 'admin/ADD.txt') {
 							// saveCustomoptimalIP
 							try {
@@ -1148,10 +1101,12 @@ export default {
 												vmessNet = 'ws';
 												vmessPath = transportPathParamValue;
 											}
-											// Determine TLS
-											const vmessTLS = 'tls';
-											const vmessSNI = 'example.com';
-											const vmessFP = config_JSON.Fingerprint || 'chrome';
+											// Determine TLS based on port
+											const tlsPorts = [443, 2053, 2083, 2087, 2096, 8443];
+											const isNodeTLS = tlsPorts.includes(Number(nodePort));
+											const vmessTLS = isNodeTLS ? 'tls' : '';
+											const vmessSNI = isNodeTLS ? 'example.com' : '';
+											const vmessFP = isNodeTLS ? (config_JSON.Fingerprint || 'chrome') : '';
 											const vmessLink = generateVMessLink({
 												host: nodeAddress,
 												port: nodePort,
@@ -1310,7 +1265,7 @@ export default {
 											if (vmess.host === 'example.com')
 												vmess.host = currentHost;
 											if (vmess.sni === 'example.com')
-												vmess.sni = currentHost;
+												vmess.sni = vmess.tls === 'tls' ? currentHost : '';
 											// Also handle ps if needed? No, ps is remark
 											// Re-encode
 											return 'vmess://' + btoa(JSON.stringify(vmess));

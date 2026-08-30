@@ -8,7 +8,7 @@ import { buildLocal204Response, createUplinkWriteQueue, isSpeedTestSite } from '
 import { forwardTCP, forwardUDP, invalidateTCPConnectorGeneration } from '../core/tcp.js';
 import { forwardTrojanUDPData, parseTrojanRequest, parseVLESSRequest } from '../core/protocol.js';
 import { getValidDataLength, log, toUint8Array } from '../utils/helpers.js';
-import { parseVMessRequest } from '../core/vmess.js';
+import { parseVMessRequest, vmessCreateResponseHeader } from '../core/vmess.js';
 
 
 export async function handleGRPCRequest(request, yourUUID, proxyContext = {}) {
@@ -313,8 +313,12 @@ export async function handleGRPCRequest(request, yourUUID, proxyContext = {}) {
 										// For now, handle first body as raw (for none) or try to decrypt
 										const firstBody = rawClientData;
 										// If security is not none, try to handle chunked body
-										// Simplified: forward as raw for now
-										grpcBridge.send(new Uint8Array([responseHeader || 0, 0]));
+										const respHeaderBytes = await vmessCreateResponseHeader(
+											responseHeader || 0,
+											vmessParsed.bodyKey,
+											vmessParsed.bodyIV
+										);
+										grpcBridge.send(respHeaderBytes);
 										await forwardTCP(
 											hostname,
 											port,

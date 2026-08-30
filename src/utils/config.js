@@ -75,38 +75,6 @@ export async function logRequest(
 			UA: request.headers.get('User-Agent') || 'Unknown',
 			TIME: currentTime.getTime(),
 		};
-		if (config_JSON.TG.enable) {
-			const TG_TXT = await env.KV.get('tg.json');
-			const TG_JSON = tryParseJSON(TG_TXT);
-			if (TG_JSON?.BotToken && TG_JSON?.ChatID) {
-				const requestTime =
-					new Date(logEntry.TIME).toISOString().replace('T', ' ').slice(0, 19) +
-					' UTC';
-				const requestURL = new URL(logEntry.URL);
-				const msg =
-					`<b>#${config_JSON.optSubGenerator.SUBNAME} Log Notification</b>\n\n` +
-					`📌 <b>Type:</b> #${logEntry.TYPE}\n` +
-					`🌐 <b>IP:</b> <code>${logEntry.IP}</code>\n` +
-					`📍 <b>Location:</b> ${logEntry.CC}\n` +
-					`🏢 <b>ASN:</b> ${logEntry.ASN}\n` +
-					`🔗 <b>Domain:</b> <code>${requestURL.host}</code>\n` +
-					`🔍 <b>Path:</b> <code>${requestURL.pathname + requestURL.search}</code>\n` +
-					`🤖 <b>User-Agent:</b> <code>${logEntry.UA}</code>\n` +
-					`📅 <b>Time:</b> ${requestTime}\n` +
-					`${config_JSON.CF.Usage.success ? `📊 <b>Requests:</b> ${config_JSON.CF.Usage.total}/${config_JSON.CF.Usage.max} <b>${((config_JSON.CF.Usage.total / config_JSON.CF.Usage.max) * 100).toFixed(2)}%</b>\n` : ''}`;
-				await fetch(
-					`https://api.telegram.org/bot${TG_JSON.BotToken}/sendMessage?chat_id=${TG_JSON.ChatID}&parse_mode=HTML&text=${encodeURIComponent(msg)}`,
-					{
-						method: 'GET',
-						headers: {
-							Accept: 'text/html,application/xhtml+xml,application/xml;',
-							'Accept-Encoding': 'gzip, deflate, br',
-							'User-Agent': logEntry.UA || 'Unknown',
-						},
-					}
-				).catch(() => {});
-			}
-		}
 		writeKVLog = ['1', 'true'].includes(env.OFF_LOG) ? false : writeKVLog;
 		if (!writeKVLog) return;
 		let logArray = [];
@@ -239,11 +207,6 @@ export async function readConfigJSON(
 					},
 				},
 			},
-			TG: {
-				enable: false,
-				BotToken: null,
-				ChatID: null,
-			},
 			CF: {
 				Email: null,
 				GlobalAPIKey: null,
@@ -280,7 +243,6 @@ export async function readConfigJSON(
 	if (!config_JSON.proxy.pathTemplate)
 		config_JSON.proxy.pathTemplate = defaultConfigJSON.proxy.pathTemplate;
 	if (!config_JSON.proxy.SOCKS5) config_JSON.proxy.SOCKS5 = defaultConfigJSON.proxy.SOCKS5;
-	if (!config_JSON.TG) config_JSON.TG = defaultConfigJSON.TG;
 	if (!config_JSON.CF) config_JSON.CF = defaultConfigJSON.CF;
 
 	if (!config_JSON.subConverterConfig.SUBLIST) config_JSON.subConverterConfig.SUBLIST = false;
@@ -435,22 +397,6 @@ export async function readConfigJSON(
 					})
 				: `${config_JSON.protocolType}://${userID}@${host}:443?security=tls&type=${transportProtocol + echLinkParam}&${domainFieldName}=${host}&fp=${config_JSON.Fingerprint}&sni=${host}&${pathFieldName}=${encodeURIComponent(transportPathParamValue) + tlsFragmentParam}&encryption=none#${encodeURIComponent(config_JSON.optSubGenerator.SUBNAME)}`;
 	config_JSON.optSubGenerator.TOKEN = await MD5MD5(hostname + userID);
-
-	const initTG_JSON = { BotToken: null, ChatID: null };
-	config_JSON.TG = {
-		enable: config_JSON.TG.enable ? config_JSON.TG.enable : false,
-		...initTG_JSON,
-	};
-	const TG_TXT = await env.KV.get('tg.json');
-	if (!TG_TXT) {
-		await env.KV.put('tg.json', JSON.stringify(initTG_JSON, null, 2)).catch?.(() => {});
-	} else {
-		const TG_JSON = tryParseJSON(TG_TXT);
-		if (TG_JSON) {
-			config_JSON.TG.ChatID = TG_JSON.ChatID ? TG_JSON.ChatID : null;
-			config_JSON.TG.BotToken = TG_JSON.BotToken ? maskSensitiveInfo(TG_JSON.BotToken) : null;
-		}
-	}
 
 	const initCF_JSON = {
 		Email: null,

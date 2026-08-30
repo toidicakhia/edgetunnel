@@ -27,8 +27,14 @@ import {
 import { buildWSLocal204Response, createUplinkWriteQueue, isSpeedTestSite } from '../core/grain.js';
 import { closeSocketQuietly, forwardTCP, forwardUDP, invalidateTCPConnectorGeneration, webSocketSendAndAwait } from '../core/tcp.js';
 import { concatByteData, getValidDataLength, log, toUint8Array } from '../utils/helpers.js';
-import { sha224 } from '../utils/crypto.js';
-import { parseVMessRequest } from '../core/vmess.js';
+import {
+	parseVMessRequest,
+	vmessCreateResponseHeader,
+	vmessEncryptChunk,
+	vmessDecryptChunk,
+	PureSha256,
+	ShakeSizeParser,
+} from '../core/vmess.js';
 
 
 export function isValidWSEarlyData(bytes, token) {
@@ -674,6 +680,16 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 					throw new Error('VMess UDP non-DNS not supported');
 				}
 			}
+			// Derive response keys for AEAD
+			const bodyKeyHash = new PureSha256().update(ctx.bodyKey).digest();
+			const bodyIVHash = new PureSha256().update(ctx.bodyIV).digest();
+			ctx.respBodyKey = bodyKeyHash.slice(0, 16);
+			ctx.respBodyIV = bodyIVHash.slice(0, 16);
+			ctx.respCount = 0;
+			ctx.respHeaderSent = false;
+			ctx.respShakeParser = (ctx.option & 0x04) ? new ShakeSizeParser(ctx.respBodyIV) : null;
+			ctx.reqShakeParser = (ctx.option & 0x04) ? new ShakeSizeParser(ctx.bodyIV) : null;
+
 			// Create VMess response socket that encrypts response
 			const vmessResponseSocket = {
 				get readyState() {
@@ -682,12 +698,36 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 				async send(data) {
 					const chunk = toUint8Array(data);
 					if (!chunk.byteLength) return;
-					// For VMess response, we need to encrypt chunks and send via WebSocket
-					// For simplicity with security auto/aes-128-gcm, we can just send the raw data for now
-					// A full implementation would encrypt via vmessEncryptChunk and add VMess response header
-					// For now, we send directly to handle the common case where clients accept raw response for WS
-					// TODO: Implement proper VMess response AEAD encryption
-					await webSocketSendAndAwait(serverSock, chunk);
+					if (!ctx.respHeaderSent) {
+						ctx.respHeaderSent = true;
+						const headerBytes = await vmessCreateResponseHeader(
+							ctx.responseHeader,
+							ctx.bodyKey,
+							ctx.bodyIV
+						);
+						await webSocketSendAndAwait(serverSock, headerBytes);
+					}
+					if (ctx.security === 'none') {
+						const lenBuf = new Uint8Array([(chunk.length >>> 8) & 0xff, chunk.length & 0xff]);
+						const packet = concatByteData(lenBuf, chunk);
+						await webSocketSendAndAwait(serverSock, packet);
+					} else {
+						const encChunk = await vmessEncryptChunk(
+							chunk,
+							ctx.respBodyKey,
+							ctx.respBodyIV,
+							ctx.respCount++,
+							ctx.security === 'auto' ? 'aes-128-gcm' : ctx.security
+						);
+						let lenBuf;
+						if (ctx.respShakeParser) {
+							lenBuf = ctx.respShakeParser.encode(encChunk.length);
+						} else {
+							lenBuf = new Uint8Array([(encChunk.length >>> 8) & 0xff, encChunk.length & 0xff]);
+						}
+						const packet = concatByteData(lenBuf, encChunk);
+						await webSocketSendAndAwait(serverSock, packet);
+					}
 				},
 				close() {
 					closeSocketQuietly(serverSock);
@@ -698,31 +738,26 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			// Handle first body data if present
 			const firstBody = parsed.rawClientData;
 			if (firstBody && firstBody.byteLength) {
-				// If security is not none, the first body is still encrypted as part of VMess body chunks
-				// We need to handle VMess body chunk framing: 2-byte length + encrypted payload
-				// For now, if security is aes-128-gcm or auto, we need to decrypt the first body chunk
-				// Simplified: Assume firstBody is already the decrypted payload (for security none) or single chunk
-				// For aes-128-gcm, we try to decrypt the chunk
 				if (
 					ctx.security === 'aes-128-gcm' ||
 					ctx.security === 'auto' ||
 					ctx.security === 'chacha20-poly1305'
 				) {
-					// The firstBody may contain one or more VMess body chunks (length-prefixed)
-					// We need to parse the chunked body
 					let offset = 0;
 					while (offset + 2 <= firstBody.length) {
-						const len = (firstBody[offset] << 8) | firstBody[offset + 1];
+						let len;
+						if (ctx.reqShakeParser) {
+							len = ctx.reqShakeParser.decode(firstBody.subarray(offset, offset + 2));
+						} else {
+							len = (firstBody[offset] << 8) | firstBody[offset + 1];
+						}
 						offset += 2;
 						if (len === 0) break;
 						if (offset + len > firstBody.length) break;
 						const chunkData = firstBody.slice(offset, offset + len);
 						offset += len;
-						// ChunkData is encrypted (16 tag included for GCM)
 						let decrypted;
 						try {
-							// Use vmessDecryptChunk helper
-							const { vmessDecryptChunk } = await import('../core/vmess.js');
 							decrypted = await vmessDecryptChunk(
 								chunkData,
 								ctx.bodyKey,
@@ -746,7 +781,6 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 							);
 						}
 					}
-					// Handle any remaining bytes as raw (for security none)
 					if (offset < firstBody.length) {
 						const remaining = firstBody.slice(offset);
 						if (remaining.byteLength)
@@ -777,7 +811,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 					);
 				}
 			} else {
-				// No first body, just establish TCP with empty data (will wait for next chunks)
+				// No first body, establish TCP
 				await forwardTCP(
 					ctx.targetHost,
 					ctx.targetPort,
@@ -794,15 +828,17 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 		}
 		// Subsequent packets: handle VMess body chunks
 		if (ctx.security === 'none') {
-			// For none, body is raw, forward directly
 			await writeToRemote(data);
 			return;
 		}
-		// For encrypted, need to handle chunked framing
-		// Buffer the data and try to parse chunks
 		ctx.buffer = concatByteData(ctx.buffer, data);
 		while (ctx.buffer.length >= 2) {
-			const len = (ctx.buffer[0] << 8) | ctx.buffer[1];
+			let len;
+			if (ctx.reqShakeParser) {
+				len = ctx.reqShakeParser.decode(ctx.buffer.subarray(0, 2));
+			} else {
+				len = (ctx.buffer[0] << 8) | ctx.buffer[1];
+			}
 			if (len === 0) {
 				ctx.buffer = new Uint8Array(0);
 				break;
@@ -812,7 +848,6 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			ctx.buffer = ctx.buffer.slice(2 + len);
 			let decrypted;
 			try {
-				const { vmessDecryptChunk } = await import('../core/vmess.js');
 				decrypted = await vmessDecryptChunk(
 					chunkData,
 					ctx.bodyKey,
@@ -822,11 +857,9 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 				);
 				ctx.count++;
 			} catch {
-				// If decrypt fails, try raw
 				decrypted = chunkData;
 			}
 			if (decrypted && decrypted.byteLength) {
-				// Forward to remote
 				if (ctx.responseSocket) {
 					await writeToRemote(decrypted);
 				} else {

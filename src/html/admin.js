@@ -632,7 +632,6 @@ export function adminPage() {
 			<button class="tab-btn" onclick="switchTab('generator', this)">⚡ Optimal Subscriptions</button>
 			<button class="tab-btn" onclick="switchTab('subconverter', this)">🔄 Subconverter</button>
 			<button class="tab-btn" onclick="switchTab('proxy', this)">🔀 Reverse & Chained Proxy</button>
-			<button class="tab-btn" onclick="switchTab('telegram', this)">🔔 Telegram Notifications</button>
 			<button class="tab-btn" onclick="switchTab('cloudflare', this)">☁️ Cloudflare API</button>
 			<button class="tab-btn" onclick="switchTab('logs', this)">📜 Operation Logs</button>
 		</div>
@@ -929,7 +928,7 @@ export function adminPage() {
 					</div>
 					<div class="form-group" style="grid-column: 1 / -1;">
 						<label class="form-label">SOCKS5 Target Whitelist (comma separated)</label>
-						<input type="text" class="form-control" id="cfg-socks5Whitelist" placeholder="api.telegram.org, chatgpt.com">
+						<input type="text" class="form-control" id="cfg-socks5Whitelist" placeholder="google.com, chatgpt.com">
 					</div>
 				</div>
 			</div>
@@ -949,42 +948,7 @@ export function adminPage() {
 			</div>
 		</div>
 
-		<!-- Tab 6: Telegram Notifications -->
-		<div id="tab-telegram" class="tab-panel">
-			<div class="card">
-				<div class="card-header">
-					<div>
-						<div class="card-title">🔔 Telegram Bot Alerts</div>
-						<div class="card-desc">Receive real-time security alerts, admin logins, and operational status on Telegram</div>
-					</div>
-				</div>
-				<div class="form-grid">
-					<div class="form-group">
-						<label class="form-label">Telegram Bot Token</label>
-						<input type="password" class="form-control" id="cfg-tgBotToken" placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz">
-					</div>
-					<div class="form-group">
-						<label class="form-label">Telegram Chat ID</label>
-						<input type="text" class="form-control" id="cfg-tgChatID" placeholder="123456789">
-					</div>
-				</div>
-				<div style="display: flex; align-items: center; justify-content: space-between; margin-top: 0.5rem;">
-					<div class="toggle-group" style="flex: 1; margin-right: 1rem;">
-						<div class="toggle-info">
-							<div class="toggle-title">Enable Telegram Notifications</div>
-							<div class="toggle-desc">Send alert messages for admin events</div>
-						</div>
-						<label class="switch">
-							<input type="checkbox" id="cfg-tgEnable">
-							<span class="slider"></span>
-						</label>
-					</div>
-					<button class="btn btn-secondary" onclick="saveTgSettings()">Save Telegram Settings</button>
-				</div>
-			</div>
-		</div>
-
-		<!-- Tab 7: Cloudflare API -->
+		<!-- Tab 6: Cloudflare API -->
 		<div id="tab-cloudflare" class="tab-panel">
 			<div class="card">
 				<div class="card-header">
@@ -1183,12 +1147,7 @@ export function adminPage() {
 			document.getElementById('cfg-socks5Account').value = px.SOCKS5?.account || '';
 			document.getElementById('cfg-socks5Whitelist').value = (px.SOCKS5?.whitelist || []).join(', ');
 
-			// Tab 6: Telegram
-			document.getElementById('cfg-tgEnable').checked = !!cfg.TG?.enable;
-			document.getElementById('cfg-tgBotToken').value = cfg.TG?.BotToken || '';
-			document.getElementById('cfg-tgChatID').value = cfg.TG?.ChatID || '';
-
-			// Tab 7: Cloudflare
+			// Tab 6: Cloudflare
 			document.getElementById('cfg-cfEmail').value = cfg.CF?.Email || '';
 			document.getElementById('cfg-cfApiKey').value = cfg.CF?.GlobalAPIKey || '';
 			document.getElementById('cfg-cfAccountId').value = cfg.CF?.AccountID || '';
@@ -1273,26 +1232,6 @@ export function adminPage() {
 				else showToast('Failed to save ADD.txt', 'error');
 			} catch (e) {
 				showToast('Error saving ADD.txt: ' + e.message, 'error');
-			}
-		}
-
-		// Save Telegram Settings
-		async function saveTgSettings() {
-			try {
-				const data = {
-					BotToken: document.getElementById('cfg-tgBotToken').value,
-					ChatID: document.getElementById('cfg-tgChatID').value,
-					enable: document.getElementById('cfg-tgEnable').checked
-				};
-				const res = await fetch('/admin/tg.json', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(data)
-				});
-				if (res.ok) showToast('Telegram settings saved! 🔔', 'success');
-				else showToast('Failed to save Telegram settings', 'error');
-			} catch (e) {
-				showToast('Error: ' + e.message, 'error');
 			}
 		}
 

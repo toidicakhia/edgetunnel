@@ -12,6 +12,7 @@ import {
 	SS_SUPPORTED_CIPHERS,
 } from '../src/core/protocol.js';
 import { sha224 } from '../src/utils/crypto.js';
+import { readXHTTPFirstPacket } from '../src/handlers/xhttp.js';
 
 test('getUUIDBytes converts UUID string to 16 bytes and matches', () => {
 	const uuid = 'd342d11e-d424-4583-b36e-524ab1f0afa4';
@@ -123,4 +124,20 @@ test('Shadowsocks AEAD encryption/decryption roundtrip', async () => {
 	const decrypted = await SSAEADDecrypt(sessionKey, decNonce, ciphertext);
 
 	assert.equal(new TextDecoder().decode(decrypted), 'Hello, Shadowsocks AEAD!');
+});
+
+test('readXHTTPFirstPacket rejects invalid non-proxy payload immediately without hanging', async () => {
+	const invalidPayload = new TextEncoder().encode('POST / HTTP/1.1\r\nHost: example.com\r\n\r\n{"test":123}');
+	let readCount = 0;
+	const mockReader = {
+		read: async () => {
+			readCount++;
+			if (readCount === 1) return { value: invalidPayload, done: false };
+			return { value: undefined, done: true };
+		},
+	};
+	const uuid = 'd342d11e-d424-4583-b36e-524ab1f0afa4';
+	const res = await readXHTTPFirstPacket(mockReader, uuid);
+	assert.equal(res, null);
+	assert.equal(readCount, 1); // Exited on the first chunk without hanging in loop!
 });

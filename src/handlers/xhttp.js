@@ -4,10 +4,10 @@ import {
 	isSpeedTestSite,
 } from '../core/grain.js';
 import { closeSocketQuietly, forwardTCP, forwardUDP, invalidateTCPConnectorGeneration } from '../core/tcp.js';
-import { forwardTrojanUDPData, uuidBytesMatch, vlessTextDecoder } from '../core/protocol.js';
+import { forwardTrojanUDPData, uuidBytesMatch, vlessTextDecoder, getUUIDBytes } from '../core/protocol.js';
 import { concatByteData, getValidDataLength, log } from '../utils/helpers.js';
 import { sha224 } from '../utils/crypto.js';
-import { parseVMessRequest } from '../core/vmess.js';
+import { parseVMessRequest, getCmdKey, decodeAuthID } from '../core/vmess.js';
 
 export const HPACKHuffmanCodeLen = [
 	13, 23, 28, 28, 28, 28, 28, 28, 28, 24, 30, 28, 28, 30, 28, 28, 28, 28, 28, 28, 28, 28, 30, 28,
@@ -409,7 +409,16 @@ export async function readXHTTPFirstPacket(reader, token) {
 
 	const tryParseVLESSFirstPacket = (data) => {
 		const length = data.byteLength;
-		if (length < 18) return { status: 'need_more' };
+		if (length < 1) return { status: 'need_more' };
+		if (data[0] !== 0) return { status: 'invalid' };
+		if (length < 18) {
+			const expectedUUID = getUUIDBytes(token);
+			if (!expectedUUID) return { status: 'invalid' };
+			for (let i = 0; i < length - 1; i++) {
+				if (data[1 + i] !== expectedUUID[i]) return { status: 'invalid' };
+			}
+			return { status: 'need_more' };
+		}
 		if (!uuidBytesMatch(data, 1, token)) return { status: 'invalid' };
 
 		const optLen = data[17];
@@ -470,11 +479,11 @@ export async function readXHTTPFirstPacket(reader, token) {
 		const passwordHash = sha224(token);
 		const passwordHashBytes = new TextEncoder().encode(passwordHash);
 		const length = data.byteLength;
-		if (length < 58) return { status: 'need_more' };
-		if (data[56] !== 0x0d || data[57] !== 0x0a) return { status: 'invalid' };
-		for (let i = 0; i < 56; i++) {
+		for (let i = 0; i < Math.min(length, 56); i++) {
 			if (data[i] !== passwordHashBytes[i]) return { status: 'invalid' };
 		}
+		if (length < 58) return { status: 'need_more' };
+		if (data[56] !== 0x0d || data[57] !== 0x0a) return { status: 'invalid' };
 
 		const socksStart = 58;
 		if (length < socksStart + 2) return { status: 'need_more' };
@@ -528,7 +537,20 @@ export async function readXHTTPFirstPacket(reader, token) {
 	};
 
 	const tryParseVMessFirstPacket = async (data) => {
-		if (data.byteLength < 50) return { status: 'need_more' };
+		const length = data.byteLength;
+		if (length < 16) return { status: 'need_more' };
+		let cmdKey;
+		try {
+			cmdKey = getCmdKey(token);
+		} catch {
+			return { status: 'invalid' };
+		}
+		const authID = data.slice(0, 16);
+		const decoded = decodeAuthID(authID, cmdKey);
+		if (!decoded) return { status: 'invalid' };
+		const nowSec = Math.floor(Date.now() / 1000);
+		if (Math.abs(decoded.timeSec - nowSec) > 120) return { status: 'invalid' };
+		if (length < 50) return { status: 'need_more' };
 		try {
 			const vmess = await parseVMessRequest(data, token);
 			if (!vmess.hasError) {
@@ -585,8 +607,11 @@ export async function readXHTTPFirstPacket(reader, token) {
 			trojanResult.status === 'invalid' &&
 			vlessResult.status === 'invalid' &&
 			vmessResult.status === 'invalid'
-		)
+		) {
 			return null;
+		}
+
+		if (offset > 4096) return null;
 	}
 
 	const finalData = buffer.subarray(0, offset);
