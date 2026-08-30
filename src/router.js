@@ -46,6 +46,7 @@ import { fetchOptimalAPI, fetchOptimalSubGeneratorData, generateRandomIPs } from
 import { getXHTTPPaddingIdentifiers, handleXHTTPRequest } from './handlers/xhttp.js';
 import { handleGRPCRequest } from './handlers/grpc.js';
 import { handleWSRequest } from './handlers/ws.js';
+import { generateVMessLink } from './core/vmess.js';
 import { html1101, nginx } from './html/camouflage.js';
 import { identifyISP, isIPHostname } from './utils/network.js';
 import { sstpConnect } from './core/sstp.js';
@@ -385,7 +386,7 @@ export default {
 													: 'mixed';
 
 						if (!ua.includes('mozilla')) responseHeaders["Content-Disposition"] = `attachment; filename*=utf-8''${encodeURIComponent(config_JSON.optSubGenerator.SUBNAME)}`;
-						const protocolType = ((url.searchParams.has('surge') || ua.includes('surge')) && config_JSON.protocolType !== 'ss') ? 'tro' + 'jan' : config_JSON.protocolType;
+						const protocolType = ((url.searchParams.has('surge') || ua.includes('surge')) && config_JSON.protocolType !== 'ss' && config_JSON.protocolType !== 'vmess') ? 'tro' + 'jan' : config_JSON.protocolType;
 						let subscriptionContent = '';
 						if (subscriptionType === 'mixed') {
 							const tlsFragmentParam = config_JSON.TLSFragment == 'Shadowrocket' ? `&fragment=${encodeURIComponent('1,40-60,30-50,tlshello')}` : config_JSON.TLSFragment == 'Happ' ? `&fragment=${encodeURIComponent('3,1,tlshello')}` : '';
@@ -478,7 +479,43 @@ export default {
 								}
 								if (isLoonOrSurge) fullNodePath = fullNodePath.replace(/,/g, '%2C');
 
-								if (protocolType === 'ss' && !asOptimalSubGenerator) {
+								if (protocolType === 'vmess' && !asOptimalSubGenerator) {
+									// VMess link: vmess://<base64(json)>
+									const transportPathParamValue = getTransportPathParamValue(config_JSON, fullNodePath, asOptimalSubGenerator);
+									// Map internal transport to VMess net field
+									let vmessNet = 'ws';
+									let vmessPath = transportPathParamValue;
+									let vmessHost = 'example.com';
+									if (config_JSON.transportProtocol === 'grpc') {
+										vmessNet = 'grpc';
+										vmessPath = transportPathParamValue;
+										vmessHost = 'example.com';
+									} else if (config_JSON.transportProtocol === 'xhttp') {
+										// XHTTP not standard for VMess, fallback to ws with xhttp path
+										vmessNet = 'ws';
+										vmessPath = transportPathParamValue;
+									}
+									// Determine TLS
+									const vmessTLS = 'tls';
+									const vmessSNI = 'example.com';
+									const vmessFP = config_JSON.Fingerprint || 'chrome';
+									const vmessLink = generateVMessLink({
+										host: nodeAddress,
+										port: nodePort,
+										uuid: '00000000-0000-4000-8000-000000000000',
+										security: 'auto',
+										net: vmessNet,
+										path: vmessPath,
+										hostHeader: vmessHost,
+										tls: vmessTLS,
+										sni: vmessSNI,
+										fp: vmessFP,
+										ps: nodeRemark,
+									});
+									// For VMess, we need to add ECH and fragment as well? VMess json doesn't support them directly,
+									// but we can append as extra params in the JSON's path if needed. For now, handle ECH via vmess link's sni.
+									return vmessLink;
+								} else if (protocolType === 'ss' && !asOptimalSubGenerator) {
 									if (!config_JSON.SS.TLS) {
 										const tlsPorts = [443, 2053, 2083, 2087, 2096, 8443];
 										const nonTLSPorts = [80, 2052, 2082, 2086, 2095, 8080];
@@ -519,6 +556,39 @@ export default {
 									replaceHostCount++;
 									return currentRandomHost;
 								});
+							// Handle VMess links where id/host/sni are inside base64 JSON
+							if (protocolType === 'vmess' && subscriptionContent.includes('vmess://')) {
+								// For VMess, each link's JSON contains id, host, sni, path etc. The previous replaces didn't affect base64.
+								// We need to decode each vmess:// line, replace, and re-encode.
+								// Use a separate counter for VMess hosts to keep rotation consistent with VLESS
+								let vmessHostIdx = 0;
+								subscriptionContent = subscriptionContent
+									.split('\n')
+									.map((line) => {
+										if (!line.startsWith('vmess://')) return line;
+										try {
+											const b64 = line.slice(8).trim();
+											const jsonStr = atob(b64);
+											const vmess = JSON.parse(jsonStr);
+											// Replace id
+											if (vmess.id === '00000000-0000-4000-8000-000000000000') vmess.id = config_JSON.UUID;
+											// Replace host/sni/add if they are example.com (or contain it)
+											// For VMess, add is the optimal IP, not example.com, so we only replace host/sni
+											// But to keep host rotation consistent, we pick a host for this VMess node
+											const originalHost = shuffledHOSTS[vmessHostIdx % shuffledHOSTS.length];
+											const currentHost = replaceWildcardWithRandomChars(originalHost);
+											vmessHostIdx++;
+											if (vmess.host === 'example.com') vmess.host = currentHost;
+											if (vmess.sni === 'example.com') vmess.sni = currentHost;
+											// Also handle ps if needed? No, ps is remark
+											// Re-encode
+											return 'vmess://' + btoa(JSON.stringify(vmess));
+										} catch (e) {
+											return line;
+										}
+									})
+									.join('\n');
+							}
 						}
 
 						if (subscriptionType === 'mixed' && (!ua.includes('mozilla') || url.searchParams.has('b64') || url.searchParams.has('base64'))) subscriptionContent = btoa(subscriptionContent);

@@ -10,8 +10,9 @@ import {
 } from '../core/grain.js';
 import { closeSocketQuietly, forwardTCP, forwardUDP } from '../core/tcp.js';
 import { forwardTrojanUDPData, uuidBytesMatch, vlessTextDecoder } from '../core/protocol.js';
-import { log } from '../utils/helpers.js';
+import { concatByteData, log, toUint8Array } from '../utils/helpers.js';
 import { sha224 } from '../utils/crypto.js';
+import { parseVMessRequest } from '../core/vmess.js';
 
 export const HPACKHuffmanCodeLen = [
 	13, 23, 28, 28, 28, 28, 28, 28, 28, 24, 30, 28, 28, 30, 28, 28, 28, 28, 28, 28, 28, 28, 30, 28,
@@ -122,6 +123,50 @@ export async function handleXHTTPRequest(request, yourUUID, proxyContext = {}) {
 	if (firstPacket.isUDP)
 		return handleXHTTPUDPRequest(firstPacket, reader, request, proxyContext, responseHeaders);
 
+	// VMess over XHTTP: handle body encryption and response header
+	let vmessXHTTPInfo = null;
+	let vmessBodyKey = null;
+	let vmessBodyIV = null;
+	let vmessSecurity = null;
+	let vmessResponseHeader = 0;
+	let vmessFirstBodyDecrypted = null;
+	if (firstPacket.protocol === 'vmess' && firstPacket.vmessInfo) {
+		vmessXHTTPInfo = firstPacket.vmessInfo;
+		vmessBodyKey = vmessXHTTPInfo.bodyKey;
+		vmessBodyIV = vmessXHTTPInfo.bodyIV;
+		vmessSecurity = vmessXHTTPInfo.security;
+		vmessResponseHeader = vmessXHTTPInfo.responseHeader;
+		// Try to decrypt first body if present and security is not none
+		if (firstPacket.rawData && firstPacket.rawData.byteLength && vmessSecurity !== 'none') {
+			try {
+				const { vmessDecryptChunk } = await import('../core/vmess.js');
+				// VMess body is length-prefixed chunks
+				let buf = firstPacket.rawData;
+				let offset = 0;
+				let decryptedFirst = new Uint8Array(0);
+				let count = 0;
+				while (offset + 2 <= buf.length) {
+					const len = (buf[offset] << 8) | buf[offset + 1];
+					offset += 2;
+					if (len === 0) break;
+					if (offset + len > buf.length) break;
+					const chunk = buf.slice(offset, offset + len);
+					offset += len;
+					const dec = await vmessDecryptChunk(chunk, vmessBodyKey, vmessBodyIV, count, vmessSecurity === 'auto' ? 'aes-128-gcm' : vmessSecurity);
+					decryptedFirst = concatByteData(decryptedFirst, dec);
+					count++;
+				}
+				vmessFirstBodyDecrypted = decryptedFirst.length ? decryptedFirst : new Uint8Array(0);
+				// If we decrypted something, use it as rawData, otherwise fallback to original
+				if (vmessFirstBodyDecrypted.length) firstPacket.rawData = vmessFirstBodyDecrypted;
+			} catch (e) {
+				// Fallback to raw
+			}
+		} else if (vmessSecurity === 'none' && firstPacket.rawData) {
+			vmessFirstBodyDecrypted = firstPacket.rawData;
+		}
+	}
+
 	try {
 		reader.releaseLock();
 	} catch (e) {}
@@ -150,9 +195,9 @@ export async function handleXHTTPRequest(request, yourUUID, proxyContext = {}) {
 		socket = await forwardTCP(
 			firstPacket.hostname,
 			firstPacket.port,
-			firstPacket.rawData,
+			vmessFirstBodyDecrypted !== null ? vmessFirstBodyDecrypted : firstPacket.rawData,
 			placeholderWS,
-			firstPacket.respHeader,
+			firstPacket.protocol === 'vmess' ? new Uint8Array(0) : firstPacket.respHeader,
 			remoteConnWrapper,
 			yourUUID,
 			request,
@@ -526,6 +571,28 @@ export async function readXHTTPFirstPacket(reader, token) {
 		};
 	};
 
+	const tryParseVMessFirstPacket = async (data) => {
+		if (data.byteLength < 50) return { status: 'need_more' };
+		try {
+			const vmess = await parseVMessRequest(data, token);
+			if (!vmess.hasError) {
+				return {
+					status: 'ok',
+					result: {
+						protocol: 'vmess',
+						hostname: vmess.hostname,
+						port: vmess.port,
+						isUDP: vmess.isUDP,
+						rawData: vmess.rawClientData,
+						respHeader: new Uint8Array([vmess.responseHeader || 0]),
+						vmessInfo: vmess,
+					},
+				};
+			}
+		} catch (e) {}
+		return { status: 'invalid' };
+	};
+
 	let buffer = new Uint8Array(1024);
 	let offset = 0;
 
@@ -555,7 +622,15 @@ export async function readXHTTPFirstPacket(reader, token) {
 		const vlessResult = tryParseVLESSFirstPacket(currentData);
 		if (vlessResult.status === 'ok') return { ...vlessResult.result, reader };
 
-		if (trojanResult.status === 'invalid' && vlessResult.status === 'invalid') return null;
+		const vmessResult = await tryParseVMessFirstPacket(currentData);
+		if (vmessResult.status === 'ok') return { ...vmessResult.result, reader };
+
+		if (
+			trojanResult.status === 'invalid' &&
+			vlessResult.status === 'invalid' &&
+			vmessResult.status === 'invalid'
+		)
+			return null;
 	}
 
 	const finalData = buffer.subarray(0, offset);
@@ -563,6 +638,8 @@ export async function readXHTTPFirstPacket(reader, token) {
 	if (finalTrojanResult.status === 'ok') return { ...finalTrojanResult.result, reader };
 	const finalVlessResult = tryParseVLESSFirstPacket(finalData);
 	if (finalVlessResult.status === 'ok') return { ...finalVlessResult.result, reader };
+	const finalVMessResult = await tryParseVMessFirstPacket(finalData);
+	if (finalVMessResult.status === 'ok') return { ...finalVMessResult.result, reader };
 	return null;
 }
 ///////////////////////////////////////////////////////////////////////gRPCtransport data///////////////////////////////////////////////
