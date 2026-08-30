@@ -18,6 +18,61 @@ export function isIPHostname(hostname = '') {
 	return Boolean(tryParseURL(`http://[${host}]/`));
 }
 
+export function isDestinationSafe(address = '', port = 0) {
+	const portNum = Number(port);
+	if (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535) {
+		return false;
+	}
+
+	const addr = stripIPv6Brackets(String(address || '').trim()).toLowerCase();
+	if (!addr) return false;
+
+	// Hostname SSRF Checks
+	if (addr === 'localhost' || addr.endsWith('.local') || addr.endsWith('.internal')) {
+		return false;
+	}
+
+	// IPv4 Checks
+	const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+	const match = addr.match(ipv4Regex);
+	if (match) {
+		const octets = match.slice(1).map((x) => parseInt(x, 10));
+		if (octets.some((o) => o < 0 || o > 255)) return false;
+		const [o1, o2] = octets;
+
+		// 127.0.0.0/8 (Loopback)
+		if (o1 === 127) return false;
+		// 10.0.0.0/8 (Private)
+		if (o1 === 10) return false;
+		// 172.16.0.0/12 (Private)
+		if (o1 === 172 && o2 >= 16 && o2 <= 31) return false;
+		// 192.168.0.0/16 (Private)
+		if (o1 === 192 && o2 === 168) return false;
+		// 169.254.0.0/16 (Link-Local)
+		if (o1 === 169 && o2 === 254) return false;
+		// 100.64.0.0/10 (Carrier-Grade NAT)
+		if (o1 === 100 && o2 >= 64 && o2 <= 127) return false;
+		// 0.0.0.0/8 (Current network)
+		if (o1 === 0) return false;
+		// Multicast & Broadcast (>= 224)
+		if (o1 >= 224) return false;
+	}
+
+	// IPv6 Checks
+	if (addr.includes(':')) {
+		// Loopback ::1
+		if (addr === '::1' || addr === '0:0:0:0:0:0:0:1' || /^0*(:0*)*:1$/.test(addr)) return false;
+		// Link-local fe80::/10
+		if (addr.startsWith('fe80:') || addr.startsWith('fe80::')) return false;
+		// Unique local fc00::/7 (fc.. or fd..)
+		if (addr.startsWith('fc') || addr.startsWith('fd')) return false;
+		// Unspecified ::
+		if (addr === '::' || addr === '0:0:0:0:0:0:0:0' || /^0*(:0*)*$/.test(addr)) return false;
+	}
+
+	return true;
+}
+
 //////////////////////////////////////////////////turnConnect///////////////////////////////////////////////
 
 export async function withTimeout(promise, timeoutMs, message) {

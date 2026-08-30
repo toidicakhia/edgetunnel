@@ -141,3 +141,71 @@ test('readXHTTPFirstPacket rejects invalid non-proxy payload immediately without
 	assert.equal(res, null);
 	assert.equal(readCount, 1); // Exited on the first chunk without hanging in loop!
 });
+
+test('parseTrojanRequest supports single-hash and double-hash Trojan credentials', () => {
+	const rawToken = 'my-sub-token-123';
+	const hashOnce = sha224(rawToken);
+	const hashTwice = sha224(hashOnce);
+	const domain = 'example.com';
+	const domainBytes = new TextEncoder().encode(domain);
+
+	const buildTrojanPacket = (hashStr) => {
+		const headerLength = 56 + 2 + 1 + 1 + 1 + domainBytes.length + 2 + 2;
+		const packet = new Uint8Array(headerLength);
+		for (let i = 0; i < 56; i++) packet[i] = hashStr.charCodeAt(i);
+		packet[56] = 0x0d;
+		packet[57] = 0x0a;
+		packet[58] = 1; // TCP
+		packet[59] = 3; // Domain
+		packet[60] = domainBytes.length;
+		packet.set(domainBytes, 61);
+		const portIdx = 61 + domainBytes.length;
+		packet[portIdx] = 0x01;
+		packet[portIdx + 1] = 0xbb; // 443
+		packet[portIdx + 2] = 0x0d;
+		packet[portIdx + 3] = 0x0a;
+		return packet;
+	};
+
+	// 1. Client configured with rawToken (hashes once to hashOnce)
+	const res1 = parseTrojanRequest(buildTrojanPacket(hashOnce), rawToken);
+	assert.equal(res1.hasError, false);
+	assert.equal(res1.hostname, 'example.com');
+
+	// 2. Client configured with hashOnce from subscription link (hashes again to hashTwice)
+	const res2 = parseTrojanRequest(buildTrojanPacket(hashTwice), rawToken);
+	assert.equal(res2.hasError, false);
+	assert.equal(res2.hostname, 'example.com');
+
+	// 3. Invalid password rejected
+	const res3 = parseTrojanRequest(buildTrojanPacket(sha224('wrong-token')), rawToken);
+	assert.equal(res3.hasError, true);
+});
+
+test('isDestinationSafe blocks internal / loopback / private IP and hostnames', async () => {
+	const { isDestinationSafe } = await import('../src/utils/network.js');
+
+	// Safe destinations
+	assert.equal(isDestinationSafe('1.1.1.1', 443), true);
+	assert.equal(isDestinationSafe('google.com', 80), true);
+	assert.equal(isDestinationSafe('2606:4700:4700::1111', 443), true);
+
+	// Unsafe destinations
+	assert.equal(isDestinationSafe('localhost', 80), false);
+	assert.equal(isDestinationSafe('server.local', 80), false);
+	assert.equal(isDestinationSafe('api.internal', 80), false);
+	assert.equal(isDestinationSafe('127.0.0.1', 80), false);
+	assert.equal(isDestinationSafe('10.0.1.5', 80), false);
+	assert.equal(isDestinationSafe('172.16.0.1', 80), false);
+	assert.equal(isDestinationSafe('192.168.1.1', 80), false);
+	assert.equal(isDestinationSafe('169.254.1.1', 80), false);
+	assert.equal(isDestinationSafe('100.64.0.1', 80), false);
+	assert.equal(isDestinationSafe('0.0.0.0', 80), false);
+	assert.equal(isDestinationSafe('224.0.0.1', 80), false);
+	assert.equal(isDestinationSafe('::1', 80), false);
+	assert.equal(isDestinationSafe('fe80::1', 80), false);
+	assert.equal(isDestinationSafe('fc00::1', 80), false);
+	assert.equal(isDestinationSafe('::', 80), false);
+	assert.equal(isDestinationSafe('example.com', 0), false);
+	assert.equal(isDestinationSafe('example.com', 70000), false);
+});

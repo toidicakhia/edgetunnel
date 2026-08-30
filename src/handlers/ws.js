@@ -18,6 +18,8 @@ import {
 	SS_NONCE_LENGTH,
 	SS_SUPPORTED_CIPHERS,
 	forwardTrojanUDPData,
+	getTrojanPasswordHashes,
+	matchTrojanPassword,
 	parseTrojanRequest,
 	parseVLESSRequest,
 	ssTextDecoder,
@@ -49,11 +51,8 @@ export function isValidWSEarlyData(bytes, token) {
 	}
 	if (bytes.byteLength < 58 || bytes[56] !== 0x0d || bytes[57] !== 0x0a) return false;
 
-	const trojanPassword = sha224(token);
-	for (let i = 0; i < 56; i++) {
-		if (bytes[i] !== trojanPassword.charCodeAt(i)) return false;
-	}
-	return true;
+	const expectedHashes = getTrojanPasswordHashes(token);
+	return matchTrojanPassword(bytes, expectedHashes);
 }
 
 export function decodeWSEarlyData(header, token) {
@@ -698,18 +697,20 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 				async send(data) {
 					const chunk = toUint8Array(data);
 					if (!chunk.byteLength) return;
+					let headerBytes = new Uint8Array(0);
 					if (!ctx.respHeaderSent) {
 						ctx.respHeaderSent = true;
-						const headerBytes = await vmessCreateResponseHeader(
+						headerBytes = await vmessCreateResponseHeader(
 							ctx.responseHeader,
 							ctx.bodyKey,
 							ctx.bodyIV
 						);
-						await webSocketSendAndAwait(serverSock, headerBytes);
 					}
 					if (ctx.security === 'none') {
 						const lenBuf = new Uint8Array([(chunk.length >>> 8) & 0xff, chunk.length & 0xff]);
-						const packet = concatByteData(lenBuf, chunk);
+						const packet = headerBytes.length
+							? concatByteData(headerBytes, concatByteData(lenBuf, chunk))
+							: concatByteData(lenBuf, chunk);
 						await webSocketSendAndAwait(serverSock, packet);
 					} else {
 						const encChunk = await vmessEncryptChunk(
@@ -725,7 +726,10 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 						} else {
 							lenBuf = new Uint8Array([(encChunk.length >>> 8) & 0xff, encChunk.length & 0xff]);
 						}
-						const packet = concatByteData(lenBuf, encChunk);
+						const bodyPacket = concatByteData(lenBuf, encChunk);
+						const packet = headerBytes.length
+							? concatByteData(headerBytes, bodyPacket)
+							: bodyPacket;
 						await webSocketSendAndAwait(serverSock, packet);
 					}
 				},
@@ -735,97 +739,62 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			};
 			ctx.responseSocket = vmessResponseSocket;
 
-			// Handle first body data if present
-			const firstBody = parsed.rawClientData;
-			if (firstBody && firstBody.byteLength) {
-				if (
-					ctx.security === 'aes-128-gcm' ||
-					ctx.security === 'auto' ||
-					ctx.security === 'chacha20-poly1305'
-				) {
-					let offset = 0;
-					while (offset + 2 <= firstBody.length) {
+			// Decrypt all full chunks available in rawClientData
+			let firstPlaintext = new Uint8Array(0);
+			if (parsed.rawClientData && parsed.rawClientData.byteLength) {
+				ctx.buffer = concatByteData(ctx.buffer, parsed.rawClientData);
+				if (ctx.security === 'none') {
+					firstPlaintext = ctx.buffer;
+					ctx.buffer = new Uint8Array(0);
+				} else {
+					while (ctx.buffer.length >= 2) {
 						let len;
 						if (ctx.reqShakeParser) {
-							len = ctx.reqShakeParser.decode(firstBody.subarray(offset, offset + 2));
+							len = ctx.reqShakeParser.decode(ctx.buffer.subarray(0, 2));
 						} else {
-							len = (firstBody[offset] << 8) | firstBody[offset + 1];
+							len = (ctx.buffer[0] << 8) | ctx.buffer[1];
 						}
-						offset += 2;
-						if (len === 0) break;
-						if (offset + len > firstBody.length) break;
-						const chunkData = firstBody.slice(offset, offset + len);
-						offset += len;
+						if (len === 0) {
+							ctx.buffer = new Uint8Array(0);
+							break;
+						}
+						if (ctx.buffer.length < 2 + len) break;
+						const chunkData = ctx.buffer.slice(2, 2 + len);
+						ctx.buffer = ctx.buffer.slice(2 + len);
 						let decrypted;
 						try {
 							decrypted = await vmessDecryptChunk(
 								chunkData,
 								ctx.bodyKey,
 								ctx.bodyIV,
-								ctx.count,
+								ctx.count++,
 								ctx.security === 'auto' ? 'aes-128-gcm' : ctx.security
 							);
-							ctx.count++;
-						} catch {}
+						} catch (e) {
+							throw new Error('VMess chunk decrypt failed: ' + e.message);
+						}
 						if (decrypted && decrypted.byteLength) {
-							await forwardTCP(
-								ctx.targetHost,
-								ctx.targetPort,
-								decrypted,
-								vmessResponseSocket,
-								null,
-								remoteConnWrapper,
-								yourUUID,
-								request,
-								proxyContext
-							);
+							firstPlaintext = concatByteData(firstPlaintext, decrypted);
 						}
 					}
-					if (offset < firstBody.length) {
-						const remaining = firstBody.slice(offset);
-						if (remaining.byteLength)
-							await forwardTCP(
-								ctx.targetHost,
-								ctx.targetPort,
-								remaining,
-								vmessResponseSocket,
-								null,
-								remoteConnWrapper,
-								yourUUID,
-								request,
-								proxyContext
-							);
-					}
-				} else {
-					// none
-					await forwardTCP(
-						ctx.targetHost,
-						ctx.targetPort,
-						firstBody,
-						vmessResponseSocket,
-						null,
-						remoteConnWrapper,
-						yourUUID,
-						request,
-						proxyContext
-					);
 				}
-			} else {
-				// No first body, establish TCP
-				await forwardTCP(
-					ctx.targetHost,
-					ctx.targetPort,
-					new Uint8Array(0),
-					vmessResponseSocket,
-					null,
-					remoteConnWrapper,
-					yourUUID,
-					request,
-					proxyContext
-				);
 			}
+
+			// Establish TCP connection ONCE with all decrypted initial plaintext
+			await forwardTCP(
+				ctx.targetHost,
+				ctx.targetPort,
+				firstPlaintext,
+				vmessResponseSocket,
+				null,
+				remoteConnWrapper,
+				yourUUID,
+				request,
+				proxyContext
+			);
 			return;
 		}
+
 		// Subsequent packets: handle VMess body chunks
 		if (ctx.security === 'none') {
 			await writeToRemote(data);
@@ -843,7 +812,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 				ctx.buffer = new Uint8Array(0);
 				break;
 			}
-			if (ctx.buffer.length < 2 + len) break; // need more
+			if (ctx.buffer.length < 2 + len) break;
 			const chunkData = ctx.buffer.slice(2, 2 + len);
 			ctx.buffer = ctx.buffer.slice(2 + len);
 			let decrypted;
@@ -852,29 +821,14 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 					chunkData,
 					ctx.bodyKey,
 					ctx.bodyIV,
-					ctx.count,
+					ctx.count++,
 					ctx.security === 'auto' ? 'aes-128-gcm' : ctx.security
 				);
-				ctx.count++;
-			} catch {
-				decrypted = chunkData;
+			} catch (e) {
+				throw new Error('VMess chunk decrypt failed: ' + e.message);
 			}
 			if (decrypted && decrypted.byteLength) {
-				if (ctx.responseSocket) {
-					await writeToRemote(decrypted);
-				} else {
-					await forwardTCP(
-						ctx.targetHost,
-						ctx.targetPort,
-						decrypted,
-						serverSock,
-						null,
-						remoteConnWrapper,
-						yourUUID,
-						request,
-						proxyContext
-					);
-				}
+				await writeToRemote(decrypted);
 			}
 		}
 	};
@@ -919,10 +873,15 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 					}
 				}
 				if (!isVMess) {
+					const isTrojanDelimiter =
+						bytes.byteLength >= 58 && bytes[56] === 0x0d && bytes[57] === 0x0a;
+					const isValidTrojanCmd =
+						bytes.byteLength < 60 ||
+						bytes[58] === 0x01 ||
+						bytes[58] === 0x03 ||
+						bytes[58] === 0x7f;
 					determineProtocolType =
-						bytes.byteLength >= 58 && bytes[56] === 0x0d && bytes[57] === 0x0a
-							? 'trojan'
-							: 'VLESS';
+						isTrojanDelimiter && isValidTrojanCmd ? 'trojan' : 'VLESS';
 				}
 			}
 			isTrojan = determineProtocolType === 'trojan';

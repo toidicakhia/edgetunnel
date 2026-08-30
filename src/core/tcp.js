@@ -15,7 +15,7 @@ import { connectTrojanProxy, extractTrojanProxyHandshakeData } from './protocol.
 import { createRequestTCPConnector, httpConnect, httpsConnect, socks5Connect } from './proxy.js';
 import { doHQuery, resolveAddressPort } from '../utils/doh.js';
 import { getValidDataLength, log, toUint8Array } from '../utils/helpers.js';
-import { isIPHostname, isIPv4 } from '../utils/network.js';
+import { isDestinationSafe, isIPHostname, isIPv4 } from '../utils/network.js';
 import { sstpConnect } from './sstp.js';
 import { turnConnect } from './turn.js';
 
@@ -34,6 +34,11 @@ export async function forwardTCP(
 	trojanProxyFirstPacketData = null,
 	connectOnly = false
 ) {
+	if (!isDestinationSafe(host, portNum)) {
+		log(`[TCPforward] Blocked unsafe connection to ${host}:${portNum}`);
+		closeSocketQuietly(ws);
+		return false;
+	}
 	const ctxproxyIP = proxyContext.proxyIP || '';
 	const ctxproxyType = proxyContext.proxyType !== undefined ? proxyContext.proxyType : null;
 	const ctxproxyGlobal =

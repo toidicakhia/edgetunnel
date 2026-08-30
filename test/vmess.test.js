@@ -121,7 +121,7 @@ test('vmessCreateResponseHeader creates valid decryptable response header', asyn
 	const respHeaderByte = 0x55;
 
 	const resp = await vmessCreateResponseHeader(respHeaderByte, bodyKey, bodyIV);
-	assert.equal(resp.length, 18 + 20); // 18 bytes enc len + 20 bytes enc payload (4 + 16)
+	assert.equal(resp.length, 18 + 18); // 18 bytes enc len + 18 bytes enc payload (2 + 16)
 
 	// Decrypt with client keys
 	const bodyKeyHash = new Uint8Array(await crypto.subtle.digest('SHA-256', bodyKey));
@@ -137,11 +137,29 @@ test('vmessCreateResponseHeader creates valid decryptable response header', asyn
 	const lenK = await crypto.subtle.importKey('raw', lenKey, { name: 'AES-GCM' }, false, ['decrypt']);
 	const lenPt = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: lenNonce }, lenK, resp.slice(0, 18)));
 	const payloadLen = (lenPt[0] << 8) | lenPt[1];
-	assert.equal(payloadLen, 4);
+	assert.equal(payloadLen, 2);
 
 	const payloadK = await crypto.subtle.importKey('raw', payloadKey, { name: 'AES-GCM' }, false, ['decrypt']);
 	const payloadPt = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: payloadNonce }, payloadK, resp.slice(18)));
-	assert.equal(payloadPt[0], respHeaderByte);
+	assert.equal(payloadPt[0], 0); // Option 0
+	assert.equal(payloadPt[1], 0); // Command 0
+});
+
+test('vmessEncryptChunk and vmessDecryptChunk roundtrip across multiple counts', async () => {
+	const bodyKey = crypto.getRandomValues(new Uint8Array(16));
+	const bodyIV = crypto.getRandomValues(new Uint8Array(16));
+	const plaintext1 = new TextEncoder().encode('GET /generate_204 HTTP/1.1\r\nHost: www.gstatic.com\r\n\r\n');
+	const plaintext2 = new TextEncoder().encode('HTTP/1.1 204 No Content\r\nDate: Sun, 30 Aug 2026\r\n\r\n');
+
+	// Chunk 0 (uplink)
+	const enc0 = await vmessEncryptChunk(plaintext1, bodyKey, bodyIV, 0, 'aes-128-gcm');
+	const dec0 = await vmessDecryptChunk(enc0, bodyKey, bodyIV, 0, 'aes-128-gcm');
+	assert.deepEqual(Array.from(dec0), Array.from(plaintext1));
+
+	// Chunk 1 (uplink)
+	const enc1 = await vmessEncryptChunk(plaintext2, bodyKey, bodyIV, 1, 'aes-128-gcm');
+	const dec1 = await vmessDecryptChunk(enc1, bodyKey, bodyIV, 1, 'aes-128-gcm');
+	assert.deepEqual(Array.from(dec1), Array.from(plaintext2));
 });
 
 test('generateVMessLink builds valid vmess:// format', () => {

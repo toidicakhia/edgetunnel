@@ -95,16 +95,33 @@ export async function forwardTrojanUDPProxyData(chunk, webSocket, context, reque
 	}
 }
 
+export function getTrojanPasswordHashes(passwordPlainText) {
+	const text = String(passwordPlainText || '');
+	const hash1 = sha224(text).toLowerCase();
+	const hash2 = sha224(hash1).toLowerCase();
+	const hashes = [hash1, hash2];
+	if (/^[0-9a-fA-F]{56}$/.test(text)) {
+		hashes.push(text.toLowerCase());
+	}
+	return hashes;
+}
+
+export function matchTrojanPassword(data, expectedHashes) {
+	if (!data || data.byteLength < 56) return false;
+	const headerStr = trojanTextDecoder.decode(data.subarray(0, 56)).toLowerCase();
+	return expectedHashes.some((h) => h === headerStr);
+}
+
 export function parseTrojanRequest(buffer, passwordPlainText) {
 	const data = toUint8Array(buffer);
-	const sha224Password = sha224(passwordPlainText);
 	if (data.byteLength < 58) return { hasError: true, message: 'invalid data' };
 	const crLfIndex = 56;
 	if (data[crLfIndex] !== 0x0d || data[crLfIndex + 1] !== 0x0a)
 		return { hasError: true, message: 'invalid header format' };
-	for (let i = 0; i < crLfIndex; i++) {
-		if (data[i] !== sha224Password.charCodeAt(i))
-			return { hasError: true, message: 'invalid password' };
+
+	const expectedHashes = getTrojanPasswordHashes(passwordPlainText);
+	if (!matchTrojanPassword(data, expectedHashes)) {
+		return { hasError: true, message: 'invalid password' };
 	}
 
 	const socks5Index = crLfIndex + 2;

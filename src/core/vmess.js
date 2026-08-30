@@ -1059,11 +1059,9 @@ export async function vmessCreateResponseHeader(responseHeaderByte, bodyKey, bod
 	const payloadKey = vmessKDF16(respKey, KDFSaltConstAEADRespHeaderPayloadKey);
 	const payloadNonce = vmessKDF(respIV, KDFSaltConstAEADRespHeaderPayloadIV).slice(0, 12);
 
-	// Response header plaintext: responseHeaderByte (1) + option (1) + cmdId (1) + cmdLen (1) = 4 bytes minimal
-	const plainHeader = new Uint8Array([responseHeaderByte, 0, 0, 0]);
-	const lenPlain = new Uint8Array(2);
-	lenPlain[0] = (plainHeader.length >>> 8) & 0xff;
-	lenPlain[1] = plainHeader.length & 0xff;
+	// In Xray-core server.go: plainHeader is [Option, Command] = [0, 0] (2 bytes)
+	const plainHeader = new Uint8Array([0, 0]);
+	const lenPlain = new Uint8Array([(plainHeader.length >>> 8) & 0xff, plainHeader.length & 0xff]);
 	const lenCt = await aesGcmEncrypt(lenKey, lenNonce, lenPlain, new Uint8Array(0));
 	const payloadCt = await aesGcmEncrypt(payloadKey, payloadNonce, plainHeader, new Uint8Array(0));
 	const out = new Uint8Array(lenCt.length + payloadCt.length);
