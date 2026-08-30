@@ -3,7 +3,7 @@
  * Auto-generated from _worker.js refactor
  * Original: edgetunnel 2.1 (2026-08-11)
  */
-import { Version, featureCodeDict, pagesStaticPage } from './constants.js';
+import { Version, featureCodeDict } from './constants.js';
 import {
 	PROXY_CONCURRENT_DIAL_COUNT,
 	TCP_CONCURRENT_DIAL_COUNT,
@@ -56,7 +56,7 @@ import { generateVMessLink } from './core/vmess.js';
 import { html1101, nginx } from './html/camouflage.js';
 import { loginPage } from './html/login.js';
 import { noAdminPage, noKVPage } from './html/errorPages.js';
-import { translateHtml } from './html/translate.js';
+import { adminPage } from './html/admin.js';
 import { identifyISP, isIPHostname } from './utils/network.js';
 import { sstpConnect } from './core/sstp.js';
 import { turnConnect } from './core/turn.js';
@@ -821,20 +821,13 @@ export default {
 					}
 
 					ctx.waitUntil(logRequest(env, request, accessIP, 'Admin_Login', config_JSON));
-					try {
-						const adminResponse = await fetch(pagesStaticPage + '/admin' + url.search);
-						if (adminResponse.ok) {
-							const rawHtml = await adminResponse.text();
-							return new Response(translateHtml(rawHtml), {
-								status: 200,
-								headers: {
-									'Content-Type': 'text/html; charset=UTF-8',
-									'Cache-Control': 'no-store, no-cache, must-revalidate',
-								},
-							});
-						}
-					} catch (_) {}
-					return fetch(pagesStaticPage + '/admin' + url.search);
+					return new Response(adminPage(), {
+						status: 200,
+						headers: {
+							'Content-Type': 'text/html; charset=UTF-8',
+							'Cache-Control': 'no-store, no-cache, must-revalidate',
+						},
+					});
 				} else if (accessPath === 'logout' || uuidRegex.test(accessPath)) {
 					//clearcookieandRedirectToLoginPage
 					const response = new Response('Redirecting...', {

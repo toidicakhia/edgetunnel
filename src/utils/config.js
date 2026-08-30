@@ -8,6 +8,7 @@ import { socks5Whitelist } from '../state.js';
 import { MD5MD5 } from './crypto.js';
 import { getXHTTPPaddingIdentifiers } from '../handlers/xhttp.js';
 import { log, parseToArray, randomPath } from './helpers.js';
+import { generateVMessLink } from '../core/vmess.js';
 
 export function getTransportProtocolConfig(config = {}) {
 	const isGRPC = config.transportProtocol === 'grpc';
@@ -1151,7 +1152,21 @@ export async function readConfigJSON(
 	config_JSON.LINK =
 		config_JSON.protocolType === 'ss'
 			? `${config_JSON.protocolType}://${btoa(config_JSON.SS.cipherMethod + ':' + userID)}@${host}:${config_JSON.SS.TLS ? '443' : '80'}?plugin=v2${encodeURIComponent(`ray-plugin;mode=websocket;host=${host};path=${(config_JSON.fullNodePath.includes('?') ? config_JSON.fullNodePath.replace('?', '?enc=' + config_JSON.SS.cipherMethod + '&') : config_JSON.fullNodePath + '?enc=' + config_JSON.SS.cipherMethod) + (config_JSON.SS.TLS ? ';tls' : '')};mux=0`) + echLinkParam}#${encodeURIComponent(config_JSON.optSubGenerator.SUBNAME)}`
-			: `${config_JSON.protocolType}://${userID}@${host}:443?security=tls&type=${transportProtocol + echLinkParam}&${domainFieldName}=${host}&fp=${config_JSON.Fingerprint}&sni=${host}&${pathFieldName}=${encodeURIComponent(transportPathParamValue) + tlsFragmentParam}&encryption=none#${encodeURIComponent(config_JSON.optSubGenerator.SUBNAME)}`;
+			: config_JSON.protocolType === 'vmess'
+				? generateVMessLink({
+						host,
+						port: 443,
+						uuid: userID,
+						security: 'auto',
+						net: transportProtocol.includes('grpc') ? 'grpc' : 'ws',
+						path: transportPathParamValue,
+						hostHeader: host,
+						tls: 'tls',
+						sni: host,
+						fp: config_JSON.Fingerprint,
+						ps: config_JSON.optSubGenerator.SUBNAME,
+					})
+				: `${config_JSON.protocolType}://${userID}@${host}:443?security=tls&type=${transportProtocol + echLinkParam}&${domainFieldName}=${host}&fp=${config_JSON.Fingerprint}&sni=${host}&${pathFieldName}=${encodeURIComponent(transportPathParamValue) + tlsFragmentParam}&encryption=none#${encodeURIComponent(config_JSON.optSubGenerator.SUBNAME)}`;
 	config_JSON.optSubGenerator.TOKEN = await MD5MD5(hostname + userID);
 
 	const initTG_JSON = { BotToken: null, ChatID: null };
@@ -1223,6 +1238,15 @@ export async function readConfigJSON(
 	}
 
 	config_JSON.loadTime = (performance.now() - initStartTime).toFixed(2) + 'ms';
+
+	if (config_JSON.optSubGenerator) {
+		config_JSON.optSubGenerator.localIPDB = config_JSON.optSubGenerator.localIPDB || {
+			randomIP: true,
+			randomCount: 16,
+			specifiedPort: -1,
+		};
+	}
+
 	return config_JSON;
 }
 
