@@ -56,7 +56,7 @@ export async function MD5MD5(text) {
 	const firstHex = firstHashArray.map((bytes) => bytes.toString(16).padStart(2, '0')).join('');
 
 	const secondHash = await crypto.subtle.digest('MD5', encoder.encode(firstHex.slice(7, 27)));
-	const secondHasharray = Array.from(new Uint8Array(secondHash));
+	const secondHashArray = Array.from(new Uint8Array(secondHash));
 	const secondHex = secondHashArray.map((bytes) => bytes.toString(16).padStart(2, '0')).join('');
 
 	return secondHex.toLowerCase();

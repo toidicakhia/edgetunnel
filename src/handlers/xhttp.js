@@ -504,7 +504,6 @@ export async function readXHTTPFirstPacket(reader, token) {
 				isUDP: cmd === 2,
 				rawData: data.subarray(headerLen),
 				respHeader: new Uint8Array([data[0], 0]),
-				rawData: null,
 			},
 		};
 	};
@@ -565,7 +564,6 @@ export async function readXHTTPFirstPacket(reader, token) {
 				port,
 				isUDP,
 				rawData: data.subarray(dataOffset),
-				rawData: data,
 				respHeader: null,
 			},
 		};
