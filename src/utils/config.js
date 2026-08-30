@@ -782,21 +782,21 @@ export async function logRequest(
 				const TG_TXT = await env.KV.get('tg.json');
 				const TG_JSON = JSON.parse(TG_TXT);
 				if (TG_JSON?.BotToken && TG_JSON?.ChatID) {
-					const requestTime = new Date(logEntry.TIME).toLocaleString('zh-CN', {
-						timeZone: 'Asia/Shanghai',
-					});
+					const requestTime =
+						new Date(logEntry.TIME).toISOString().replace('T', ' ').slice(0, 19) +
+						' UTC';
 					const requestURL = new URL(logEntry.URL);
 					const msg =
-						`<b>#${config_JSON.optSubGenerator.SUBNAME} log notification</b>\n\n` +
-						`📌 <b>type：</b>#${logEntry.TYPE}\n` +
-						`🌐 <b>IP：</b><code>${logEntry.IP}</code>\n` +
-						`📍 <b>location：</b>${logEntry.CC}\n` +
-						`🏢 <b>ASN：</b>${logEntry.ASN}\n` +
-						`🔗 <b>domain：</b><code>${requestURL.host}</code>\n` +
-						`🔍 <b>path：</b><code>${requestURL.pathname + requestURL.search}</code>\n` +
-						`🤖 <b>UA：</b><code>${logEntry.UA}</code>\n` +
-						`📅 <b>time：</b>${requestTime}\n` +
-						`${config_JSON.CF.Usage.success ? `📊 <b>requestUsage：</b>${config_JSON.CF.Usage.total}/${config_JSON.CF.Usage.max} <b>${((config_JSON.CF.Usage.total / config_JSON.CF.Usage.max) * 100).toFixed(2)}%</b>\n` : ''}`;
+						`<b>#${config_JSON.optSubGenerator.SUBNAME} Log Notification</b>\n\n` +
+						`📌 <b>Type:</b> #${logEntry.TYPE}\n` +
+						`🌐 <b>IP:</b> <code>${logEntry.IP}</code>\n` +
+						`📍 <b>Location:</b> ${logEntry.CC}\n` +
+						`🏢 <b>ASN:</b> ${logEntry.ASN}\n` +
+						`🔗 <b>Domain:</b> <code>${requestURL.host}</code>\n` +
+						`🔍 <b>Path:</b> <code>${requestURL.pathname + requestURL.search}</code>\n` +
+						`🤖 <b>User-Agent:</b> <code>${logEntry.UA}</code>\n` +
+						`📅 <b>Time:</b> ${requestTime}\n` +
+						`${config_JSON.CF.Usage.success ? `📊 <b>Requests:</b> ${config_JSON.CF.Usage.total}/${config_JSON.CF.Usage.max} <b>${((config_JSON.CF.Usage.total / config_JSON.CF.Usage.max) * 100).toFixed(2)}%</b>\n` : ''}`;
 					await fetch(
 						`https://api.telegram.org/bot${TG_JSON.BotToken}/sendMessage?chat_id=${TG_JSON.ChatID}&parse_mode=HTML&text=${encodeURIComponent(msg)}`,
 						{

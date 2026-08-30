@@ -54,6 +54,9 @@ import { handleGRPCRequest } from './handlers/grpc.js';
 import { handleWSRequest } from './handlers/ws.js';
 import { generateVMessLink } from './core/vmess.js';
 import { html1101, nginx } from './html/camouflage.js';
+import { loginPage } from './html/login.js';
+import { noAdminPage, noKVPage } from './html/errorPages.js';
+import { translateHtml } from './html/translate.js';
 import { identifyISP, isIPHostname } from './utils/network.js';
 import { sstpConnect } from './core/sstp.js';
 import { turnConnect } from './core/turn.js';
@@ -127,7 +130,7 @@ export default {
 		)
 			setTCPConcurrentDialCount(1);
 		let defaultProxyIP =
-				`${request.cf.colo}.${featureCodeDict[0]}.${featureCodeDict[1]}SsSs.nEt`.toLowerCase(),
+				`${request.cf?.colo || 'sjc'}.${featureCodeDict[0]}.${featureCodeDict[1]}SsSs.nEt`.toLowerCase(),
 			defaultProxyFallback = true;
 		if (env.PROXYIP) {
 			const proxyIPs = await parseToArray(env.PROXYIP);
@@ -216,15 +219,12 @@ export default {
 					301
 				);
 			if (!adminPassword)
-				return fetch(pagesStaticPage + '/noADMIN').then((r) => {
-					const headers = new Headers(r.headers);
-					headers.set(
-						'Cache-Control',
-						'no-store, no-cache, must-revalidate, proxy-revalidate'
-					);
-					headers.set('Pragma', 'no-cache');
-					headers.set('Expires', '0');
-					return new Response(r.body, { status: 404, statusText: r.statusText, headers });
+				return new Response(noAdminPage(), {
+					status: 404,
+					headers: {
+						'Content-Type': 'text/html; charset=UTF-8',
+						'Cache-Control': 'no-store, no-cache, must-revalidate',
+					},
 				});
 			if (env.KV && typeof env.KV.get === 'function') {
 				const caseSensitiveAccessPath = url.pathname.slice(1);
@@ -261,7 +261,7 @@ export default {
 								? adminPassword.replace(/[\r\n]/g, '')
 								: adminPassword)
 						) {
-							// passwordCorrect，settingscookieand return success flag
+							// password correct, set cookie and return success
 							const response = new Response(JSON.stringify({ success: true }), {
 								status: 200,
 								headers: { 'Content-Type': 'application/json;charset=utf-8' },
@@ -272,8 +272,21 @@ export default {
 							);
 							return response;
 						}
+						return new Response(
+							JSON.stringify({ success: false, error: 'Invalid password' }),
+							{
+								status: 401,
+								headers: { 'Content-Type': 'application/json;charset=utf-8' },
+							}
+						);
 					}
-					return fetch(pagesStaticPage + '/login');
+					return new Response(loginPage(), {
+						status: 200,
+						headers: {
+							'Content-Type': 'text/html; charset=UTF-8',
+							'Cache-Control': 'no-store, no-cache, must-revalidate',
+						},
+					});
 				} else if (accessPath === 'admin' || accessPath.startsWith('admin/')) {
 					//validatecookiethenRespondAdminPage
 					const cookies = request.headers.get('Cookie') || '';
@@ -796,18 +809,31 @@ export default {
 							status: 200,
 							headers: {
 								'Content-Type': 'text/plain;charset=utf-8',
-								asn: request.cf.asn,
+								asn: request.cf?.asn || '0',
 							},
 						});
 					} else if (accessPath === 'admin/cf.json') {
 						// CFconfigfile
-						return new Response(JSON.stringify(request.cf, null, 2), {
+						return new Response(JSON.stringify(request.cf || {}, null, 2), {
 							status: 200,
 							headers: { 'Content-Type': 'application/json;charset=utf-8' },
 						});
 					}
 
 					ctx.waitUntil(logRequest(env, request, accessIP, 'Admin_Login', config_JSON));
+					try {
+						const adminResponse = await fetch(pagesStaticPage + '/admin' + url.search);
+						if (adminResponse.ok) {
+							const rawHtml = await adminResponse.text();
+							return new Response(translateHtml(rawHtml), {
+								status: 200,
+								headers: {
+									'Content-Type': 'text/html; charset=UTF-8',
+									'Cache-Control': 'no-store, no-cache, must-revalidate',
+								},
+							});
+						}
+					} catch (_) {}
 					return fetch(pagesStaticPage + '/admin' + url.search);
 				} else if (accessPath === 'logout' || uuidRegex.test(accessPath)) {
 					//clearcookieandRedirectToLoginPage
@@ -1361,15 +1387,12 @@ export default {
 						headers: { 'Content-Type': 'text/plain; charset=UTF-8' },
 					});
 			} else if (!envUUID)
-				return fetch(pagesStaticPage + '/noKV').then((r) => {
-					const headers = new Headers(r.headers);
-					headers.set(
-						'Cache-Control',
-						'no-store, no-cache, must-revalidate, proxy-revalidate'
-					);
-					headers.set('Pragma', 'no-cache');
-					headers.set('Expires', '0');
-					return new Response(r.body, { status: 404, statusText: r.statusText, headers });
+				return new Response(noKVPage(), {
+					status: 404,
+					headers: {
+						'Content-Type': 'text/html; charset=UTF-8',
+						'Cache-Control': 'no-store, no-cache, must-revalidate',
+					},
 				});
 		}
 
