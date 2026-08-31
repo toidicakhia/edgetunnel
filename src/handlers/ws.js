@@ -349,6 +349,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 						}
 						const plaintextChunks = [];
 						let rekeyAttempted = false;
+						let lastConsumedLengthCipher = null;
 						while (true) {
 							if (inboundState.waitPayloadLength === null) {
 								const lengthCipherTotalLength = 2 + SS_AEAD_TAG_LENGTH;
@@ -359,6 +360,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 								);
 								inboundState.buffer =
 									inboundState.buffer.subarray(lengthCipherTotalLength);
+								lastConsumedLengthCipher = lengthCipher;
 								let lengthPlain = null;
 								try {
 									lengthPlain = await SSAEADDecrypt(
@@ -420,11 +422,42 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 							);
 							inboundState.buffer =
 								inboundState.buffer.subarray(payloadCipherTotalLength);
-							const payloadPlain = await SSAEADDecrypt(
-								inboundState.decryptKey,
-								inboundState.nonceCounter,
-								payloadCipher
-							);
+							let payloadPlain = null;
+							try {
+								payloadPlain = await SSAEADDecrypt(
+									inboundState.decryptKey,
+									inboundState.nonceCounter,
+									payloadCipher
+								);
+							} catch {
+								if (rekeyAttempted) {
+									throw new Error('SS payload decrypt failed');
+								}
+								rekeyAttempted = true;
+								inboundState.buffer = concatByteData(
+									payloadCipher,
+									concatByteData(lastConsumedLengthCipher, inboundState.buffer)
+								);
+								// A torn/corrupted payload AEAD frame: the AEAD stream is
+								// unrecoverable in place. Treat it like a fresh SS AEAD stream
+								// on this long-lived WebSocket: reset per-connection state so the
+								// next salt re-keys and forwards to a fresh remote target.
+								await SSsendqueue;
+								outboundEncryptor = null;
+								if (ssContext) {
+									ssContext.firstPacketEstablished = false;
+									ssContext.targetHost = '';
+									ssContext.targetPort = 0;
+								}
+								inboundState.hasSalt = false;
+								inboundState.waitPayloadLength = null;
+								inboundState.decryptKey = null;
+								inboundState.nonceCounter = new Uint8Array(SS_NONCE_LENGTH);
+								inboundState.cipherConfig = null;
+								const initSucceeded = await initInboundDecryptState();
+								if (!initSucceeded) return plaintextChunks;
+								continue;
+							}
 							plaintextChunks.push(payloadPlain);
 							inboundState.waitPayloadLength = null;
 						}
@@ -570,7 +603,8 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			if (
 				msg.includes('Decryption failed') ||
 				msg.includes('SS handshake decrypt failed') ||
-				msg.includes('SS length decrypt failed')
+				msg.includes('SS length decrypt failed') ||
+				msg.includes('SS payload decrypt failed')
 			) {
 
 				log(`[SS Inbound] decryption failed，connection closed: ${msg}`);
