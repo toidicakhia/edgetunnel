@@ -562,6 +562,7 @@ export async function forwardUDP(udpChunk, webSocket, respHeader, request, respo
 export function closeSocketQuietly(socket) {
 	try {
 		if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CLOSING) {
+
 			socket.close();
 		}
 	} catch {}
@@ -575,6 +576,7 @@ export function formatIdentifier(arr, offset = 0) {
 }
 
 export async function webSocketSendAndAwait(webSocket, payload) {
+
 	const sendResult = webSocket.send(payload);
 	if (sendResult && typeof sendResult.then === 'function') await sendResult;
 }

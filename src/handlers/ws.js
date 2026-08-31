@@ -348,6 +348,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 							if (!initSucceeded) return [];
 						}
 						const plaintextChunks = [];
+						let rekeyAttempted = false;
 						while (true) {
 							if (inboundState.waitPayloadLength === null) {
 								const lengthCipherTotalLength = 2 + SS_AEAD_TAG_LENGTH;
@@ -358,20 +359,57 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 								);
 								inboundState.buffer =
 									inboundState.buffer.subarray(lengthCipherTotalLength);
-								const lengthPlain = await SSAEADDecrypt(
-									inboundState.decryptKey,
-									inboundState.nonceCounter,
-									lengthCipher
-								);
-								if (lengthPlain.byteLength !== 2)
-									throw new Error('SS length decrypt failed');
-								const payloadLength = (lengthPlain[0] << 8) | lengthPlain[1];
-								if (
-									payloadLength < 0 ||
-									payloadLength > inboundState.cipherConfig.maxChunk
-								)
-									throw new Error(`SS payload length invalid: ${payloadLength}`);
-								inboundState.waitPayloadLength = payloadLength;
+								let lengthPlain = null;
+								try {
+									lengthPlain = await SSAEADDecrypt(
+										inboundState.decryptKey,
+										inboundState.nonceCounter,
+										lengthCipher
+									);
+								} catch {}
+								let lengthDecryptFailed = false;
+								if (lengthPlain === null || lengthPlain.byteLength !== 2) {
+									lengthDecryptFailed = true;
+								} else {
+									const payloadLength = (lengthPlain[0] << 8) | lengthPlain[1];
+									if (
+										payloadLength < 0 ||
+										payloadLength > inboundState.cipherConfig.maxChunk
+									) {
+										lengthDecryptFailed = true;
+									} else {
+										inboundState.waitPayloadLength = payloadLength;
+									}
+								}
+								if (lengthDecryptFailed) {
+									if (rekeyAttempted) {
+										throw new Error('SS length decrypt failed');
+									}
+									rekeyAttempted = true;
+									inboundState.buffer = concatByteData(
+										lengthCipher,
+										inboundState.buffer
+									);
+									// A new SS AEAD stream (a fresh proxied TCP connection) starts
+									// with a new salt on this long-lived WebSocket. Reset all
+									// per-connection state so the new stream re-keys and forwards
+									// to a fresh remote target instead of reusing connection 1's.
+									await SSsendqueue;
+									outboundEncryptor = null;
+									if (ssContext) {
+										ssContext.firstPacketEstablished = false;
+										ssContext.targetHost = '';
+										ssContext.targetPort = 0;
+									}
+									inboundState.hasSalt = false;
+									inboundState.waitPayloadLength = null;
+									inboundState.decryptKey = null;
+									inboundState.nonceCounter = new Uint8Array(SS_NONCE_LENGTH);
+									inboundState.cipherConfig = null;
+									const initSucceeded = await initInboundDecryptState();
+									if (!initSucceeded) return plaintextChunks;
+									continue;
+								}
 							}
 							const payloadCipherTotalLength =
 								inboundState.waitPayloadLength + SS_AEAD_TAG_LENGTH;
@@ -471,6 +509,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 							}
 						);
 					}).catch((error) => {
+
 						log(`[SSsend] encryption failed: ${error?.message || error}`);
 						closeSocketQuietly(serverSock);
 					});
@@ -496,7 +535,13 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 						return SSsendqueue;
 					},
 					close() {
-						closeSocketQuietly(serverSock);
+						// SS keeps one long-lived WebSocket across multiple proxied TCP
+						// connections. The WS lifecycle is owned by the client: it is torn
+						// down only when the client closes it (serverSock 'close' event in
+						// handleWSRequest) or on a hard error. Closing here would kill the
+						// connection mid-stream when the remote TCP peer ends (connectStreams
+						// finally calls closeSocketQuietly on this wrapper), surfacing
+						// 'io: read/write on closed pipe' to the SS client. No-op on purpose.
 					},
 				};
 				ssContext = {
@@ -515,6 +560,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 	};
 
 	const handleSSData = async (chunk) => {
+
 		const context = await getSSContext();
 		let plaintextChunks = null;
 		try {
@@ -526,6 +572,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 				msg.includes('SS handshake decrypt failed') ||
 				msg.includes('SS length decrypt failed')
 			) {
+
 				log(`[SS Inbound] decryption failed，connection closed: ${msg}`);
 				closeSocketQuietly(serverSock);
 				return;
@@ -546,6 +593,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			}
 			if (wasWritten) continue;
 			if (context.firstPacketEstablished && context.targetHost && context.targetPort > 0) {
+
 				await forwardTCP(
 					context.targetHost,
 					context.targetPort,
@@ -606,6 +654,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			context.firstPacketEstablished = true;
 			context.targetHost = hostname;
 			context.targetPort = port;
+
 			await forwardTCP(
 				hostname,
 				port,
@@ -1045,6 +1094,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 	};
 
 	const handleWSExplicitTransferError = (err) => {
+
 		if (wsExplicitTransferFailed) return;
 		wsExplicitTransferFailed = true;
 		wsExplicitTransferStopReceiving = true;

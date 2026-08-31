@@ -12,7 +12,7 @@ import { dialTCP, pumpStream } from '../../transport/internet/tcp.js';
 import { isDestinationSafe, isIPHostname, isIPv4 } from '../../utils/network.js';
 import { doHQuery } from '../../utils/doh.js';
 import { log } from '../../utils/helpers.js';
-import { TCP_CONCURRENT_DIAL_COUNT, PRELOAD_RACE_DIAL } from '../../state.js';
+import { TCP_CONCURRENT_DIAL_COUNT, preloadRaceDial as PRELOAD_RACE_DIAL } from '../../state.js';
 
 export class FreedomHandler extends Handler {
 	constructor(tag, { request = null, safeGuard = true } = {}) {

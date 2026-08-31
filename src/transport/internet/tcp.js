@@ -177,3 +177,20 @@ export function pumpStream(readable, writable, { onClose = null, onError = null 
 		},
 	};
 }
+
+/** Close a Workers WebSocket quietly (no-throw; no-op unless open/closing). */
+export function closeSocketQuietly(socket) {
+	try {
+		if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CLOSING) {
+			socket.close();
+		}
+	} catch {
+		/* ignore */
+	}
+}
+
+/** Send a payload on a Workers WebSocket, awaiting the send promise if any. */
+export async function webSocketSendAndAwait(webSocket, payload) {
+	const sendResult = webSocket.send(payload);
+	if (sendResult && typeof sendResult.then === 'function') await sendResult;
+}

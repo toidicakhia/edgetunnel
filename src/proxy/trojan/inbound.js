@@ -70,7 +70,6 @@ export class TrojanServer extends InboundServer {
 			return this._pumpToHandler(duplex.readable, forward);
 		}
 
-		const rawClientData = rawClientData;
 		const ctx = this.createSession({ email: this.password, id: this.password });
 		const dest = this.makeTarget(hostname, port, false);
 		const link = await this.dispatcher.dispatch(ctx, dest);

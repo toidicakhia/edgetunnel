@@ -395,6 +395,7 @@ export function createDownlinkGrainSender(webSocket, headerData = null, isActive
 	};
 
 	const sendRawChunk = async (chunk) => {
+
 		if (!isCurrentSenderActive()) return;
 		if (webSocket.readyState !== WebSocket.OPEN) throw new Error('ws.readyState is not open');
 		chunk = prependResponseHeader(chunk);
@@ -549,6 +550,7 @@ export function createDownlinkGrainSender(webSocket, headerData = null, isActive
 		},
 		flush,
 		async stopAndFlush() {
+
 			if (stopStarted) {
 				await waitForActiveSendComplete();
 				while (directSendPromise) await directSendPromise;
@@ -677,6 +679,8 @@ export async function connectStreams(
 		}
 	}
 	if (!currentIsConnectionStillValid()) return;
+	if (remoteConnWrapper?.socket === remoteSocket) remoteConnWrapper.socket = null;
+
 	if (readError) log(`[TCPdownlink] read failed: ${readError?.message || readError}`);
 	closeSocketQuietly(webSocket);
 }
