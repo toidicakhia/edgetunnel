@@ -3,8 +3,6 @@
  * Auto-generated from _worker.js refactor
  * Original: edgetunnel 2.1 (2026-08-11)
  */
-import { featureCodeDict } from '../constants.js';
-import { socks5Whitelist } from '../state.js';
 import { MD5MD5 } from './crypto.js';
 import { getXHTTPPaddingIdentifiers } from '../handlers/xhttp.js';
 import { log, parseToArray, randomPath, tryParseJSON } from './helpers.js';
@@ -122,11 +120,9 @@ export async function readConfigJSON(
 	resetConfig = false
 ) {
 	let config_JSON;
-	const _p = featureCodeDict[0];
 	const host = hostname,
 		Ali_DoH = 'https://dns.alidns.com/dns-query',
 		ECH_SNI = 'cloudflare-ech.com',
-		placeholder = '{{IP:PORT}}',
 		initStartTime = performance.now(),
 		defaultConfigJSON = {
 			TIME: new Date().toISOString(),
@@ -164,49 +160,6 @@ export async function readConfigJSON(
 				SUBUpdateTime: 3, // subscriptionUpdateTime（hours）
 				TOKEN: await MD5MD5(hostname + userID),
 			},
-			subConverterConfig: {
-				SUBAPI: `https://SUBAPI.${featureCodeDict[1]}ssss.net`,
-				SUBCONFIG: `https://raw.githubusercontent.com/${featureCodeDict[1]}/ACL4SSR/refs/heads/main/Clash/config/ACL4SSR_Online_Mini_MultiMode_CF.ini`,
-				SUBEMOJI: false,
-				SUBLIST: false, //outputNodeInfoOnly
-				UDP: false, // enableUDP
-				XUDP: false, // enableXUDP
-				TLS13: false, // enableTLS1.3
-				APPEND_TYPE: false, // insertNodeType
-				SORT: false, // basicNodeSorting
-			},
-			proxy: {
-				[_p]: 'auto',
-				SOCKS5: {
-					enable: null,
-					global: false,
-					account: '',
-					whitelist: socks5Whitelist,
-				},
-				pathTemplate: {
-					[_p]: 'proxyip=' + placeholder,
-					SOCKS5: {
-						global: 'socks5://' + placeholder,
-						standard: 'socks5=' + placeholder,
-					},
-					HTTP: {
-						global: 'http://' + placeholder,
-						standard: 'http=' + placeholder,
-					},
-					HTTPS: {
-						global: 'https://' + placeholder,
-						standard: 'https=' + placeholder,
-					},
-					TURN: {
-						global: 'turn://' + placeholder,
-						standard: 'turn=' + placeholder,
-					},
-					SSTP: {
-						global: 'sstp://' + placeholder,
-						standard: 'sstp=' + placeholder,
-					},
-				},
-			},
 			CF: {
 				Email: null,
 				GlobalAPIKey: null,
@@ -235,23 +188,7 @@ export async function readConfigJSON(
 		config_JSON.optSubGenerator =
 			config_JSON.optimalSubscriptionGeneration || defaultConfigJSON.optSubGenerator;
 	}
-	if (!config_JSON.subConverterConfig) {
-		config_JSON.subConverterConfig =
-			config_JSON.subscriptionConversionconfig || defaultConfigJSON.subConverterConfig;
-	}
-	if (!config_JSON.proxy) config_JSON.proxy = defaultConfigJSON.proxy;
-	if (!config_JSON.proxy.pathTemplate)
-		config_JSON.proxy.pathTemplate = defaultConfigJSON.proxy.pathTemplate;
-	if (!config_JSON.proxy.SOCKS5) config_JSON.proxy.SOCKS5 = defaultConfigJSON.proxy.SOCKS5;
 	if (!config_JSON.CF) config_JSON.CF = defaultConfigJSON.CF;
-
-	if (!config_JSON.subConverterConfig.SUBLIST) config_JSON.subConverterConfig.SUBLIST = false;
-	if (!config_JSON.subConverterConfig.UDP) config_JSON.subConverterConfig.UDP = false;
-	if (!config_JSON.subConverterConfig.XUDP) config_JSON.subConverterConfig.XUDP = false;
-	if (!config_JSON.subConverterConfig.TLS13) config_JSON.subConverterConfig.TLS13 = false;
-	if (!config_JSON.subConverterConfig.APPEND_TYPE)
-		config_JSON.subConverterConfig.APPEND_TYPE = false;
-	if (!config_JSON.subConverterConfig.SORT) config_JSON.subConverterConfig.SORT = false;
 	if (!config_JSON.gRPCUserAgent) config_JSON.gRPCUserAgent = UA;
 	config_JSON.HOST = host;
 	if (!config_JSON.HOSTS) config_JSON.HOSTS = [hostname];
@@ -274,86 +211,17 @@ export async function readConfigJSON(
 	if (!config_JSON.gRPCmode) config_JSON.gRPCmode = 'gun';
 	if (!config_JSON.SS) config_JSON.SS = { cipherMethod: 'aes-128-gcm', TLS: false };
 
-	if (!config_JSON.proxy.pathTemplate?.[_p]) {
-		config_JSON.proxy.pathTemplate = {
-			[_p]: 'proxyip=' + placeholder,
-			SOCKS5: {
-				global: 'socks5://' + placeholder,
-				standard: 'socks5=' + placeholder,
-			},
-			HTTP: {
-				global: 'http://' + placeholder,
-				standard: 'http=' + placeholder,
-			},
-			HTTPS: {
-				global: 'https://' + placeholder,
-				standard: 'https=' + placeholder,
-			},
-			TURN: {
-				global: 'turn://' + placeholder,
-				standard: 'turn=' + placeholder,
-			},
-			SSTP: {
-				global: 'sstp://' + placeholder,
-				standard: 'sstp=' + placeholder,
-			},
-		};
-	}
-	if (!config_JSON.proxy.pathTemplate.HTTPS)
-		config_JSON.proxy.pathTemplate.HTTPS = {
-			global: 'https://' + placeholder,
-			standard: 'https=' + placeholder,
-		};
-	if (!config_JSON.proxy.pathTemplate.TURN)
-		config_JSON.proxy.pathTemplate.TURN = {
-			global: 'turn://' + placeholder,
-			standard: 'turn=' + placeholder,
-		};
-	if (!config_JSON.proxy.pathTemplate.SSTP)
-		config_JSON.proxy.pathTemplate.SSTP = {
-			global: 'sstp://' + placeholder,
-			standard: 'sstp=' + placeholder,
-		};
-
-	const proxyConfig =
-		config_JSON.proxy.pathTemplate[config_JSON.proxy.SOCKS5.enable?.toUpperCase()];
-
-	let pathProxyParam = '';
-	if (proxyConfig && config_JSON.proxy.SOCKS5.account)
-		pathProxyParam = (
-			config_JSON.proxy.SOCKS5.global ? proxyConfig.global : proxyConfig.standard
-		).replace(placeholder, config_JSON.proxy.SOCKS5.account);
-	else if (config_JSON.proxy[_p] !== 'auto')
-		pathProxyParam = config_JSON.proxy.pathTemplate[_p].replace(
-			placeholder,
-			config_JSON.proxy[_p]
-		);
-
-	let proxyQueryParam = '';
-	if (pathProxyParam.includes('?')) {
-		const [proxyPathPart, proxyQueryPart] = pathProxyParam.split('?');
-		pathProxyParam = proxyPathPart;
-		proxyQueryParam = proxyQueryPart;
-	}
-
-	config_JSON.PATH = config_JSON.PATH.replace(pathProxyParam, '').replace('//', '/');
+	config_JSON.PATH = config_JSON.PATH.replace('//', '/');
 	const normalizedPath =
 		config_JSON.PATH === '/'
 			? ''
 			: config_JSON.PATH.replace(/\/+(?=\?|$)/, '').replace(/\/+$/, '');
 	const [pathPart, ...queryArray] = normalizedPath.split('?');
 	const queryPart = queryArray.length ? '?' + queryArray.join('?') : '';
-	const finalQueryPart = proxyQueryParam
-		? queryPart
-			? queryPart + '&' + proxyQueryParam
-			: '?' + proxyQueryParam
-		: queryPart;
 	config_JSON.fullNodePath =
 		(pathPart || '/') +
-		(pathPart && pathProxyParam ? '/' : '') +
-		pathProxyParam +
-		finalQueryPart +
-		(config_JSON.enable0RTT ? (finalQueryPart ? '&' : '?') + 'ed=2560' : '');
+		queryPart +
+		(config_JSON.enable0RTT ? (queryPart ? '&' : '?') + 'ed=2560' : '');
 
 	if (!config_JSON.TLSFragment && config_JSON.TLSFragment !== null)
 		config_JSON.TLSFragment = null;

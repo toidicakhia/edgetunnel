@@ -348,10 +348,9 @@ export async function fetchOptimalSubGeneratorData(optSubGeneratorHOST) {
 }
 
 export async function fetchOptimalAPI(urls, defaultPort = '443', timeoutMs = 3000) {
-	if (!urls?.length) return [[], [], [], []];
+	if (!urls?.length) return [[], [], []];
 	const results = new Set(),
-		proxyIPPool = new Set(),
-		needsSubConverterURLs = [];
+		proxyIPPool = new Set();
 	let subLinkResponseLINKContent = '';
 	await Promise.allSettled(
 		urls.map(async (url) => {
@@ -456,13 +455,6 @@ export async function fetchOptimalAPI(urls, defaultPort = '443', timeoutMs = 300
 				}
 
 				// preprocesssubscriptionContent
-				/*
-			if (text.includes('proxies:') || (text.includes('outbounds"') && text.includes('inbounds"'))) {// ClashSingboxConfig
-				needsSubConverterURLs.add(url);
-				return;
-			}
-			*/
-
 				let preprocessedSubPlaintext = text;
 				const cleanText = typeof text === 'string' ? text.replace(/\s/g, '') : '';
 				if (
@@ -605,7 +597,7 @@ export async function fetchOptimalAPI(urls, defaultPort = '443', timeoutMs = 300
 				),
 			]
 		: [];
-	return [Array.from(results), LINKArray, needsSubConverterURLs, Array.from(proxyIPPool)];
+	return [Array.from(results), LINKArray, Array.from(proxyIPPool)];
 }
 
 export async function resolveAddressPort(

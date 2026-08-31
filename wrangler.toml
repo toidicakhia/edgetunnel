@@ -9,7 +9,6 @@ id = "f6689058137d40f593e53e7c3ced4df0"
 [observability]
 enabled = false
 head_sampling_rate = 1
-redact_query_string = false
 
 [observability.logs]
 enabled = true

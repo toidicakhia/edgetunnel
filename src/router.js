@@ -7,21 +7,16 @@ import { Version, featureCodeDict } from './constants.js';
 import {
 	PROXY_CONCURRENT_DIAL_COUNT,
 	TCP_CONCURRENT_DIAL_COUNT,
-	cachedSocks5Whitelist,
 	config_JSON,
 	debugLogging,
 	preloadRaceDial,
-	socks5Whitelist,
-	setCachedSocks5Whitelist,
 	setConfigJSON,
 	setDebugLogging,
 	setPreloadRaceDial,
 	setProxyConcurrentDialCount,
-	setSocks5Whitelist,
 	setTCPConcurrentDialCount,
 } from './state.js';
-import { MD5MD5, base64SecretEncode } from './utils/crypto.js';
-import { TlsClient } from './core/tls.js';
+import { MD5MD5 } from './utils/crypto.js';
 import {
 	clashSubscriptionHotPatch,
 	getCloudflareUsage,
@@ -30,25 +25,14 @@ import {
 	logRequest,
 	readConfigJSON,
 	singboxSubscriptionHotPatch,
-	surgeSubscriptionHotPatch,
 } from './utils/config.js';
 import {
-	concatByteData,
 	log,
 	parseToArray,
 	randomPath,
 	replaceWildcardWithRandomChars,
-	safeClose,
 } from './utils/helpers.js';
-import {
-	createRequestTCPConnector,
-	getProxyDefaultPort,
-	getProxyParams,
-	getSOCKS5Account,
-	httpConnect,
-	httpsConnect,
-	socks5Connect,
-} from './core/proxy.js';
+import { getProxyParams } from './core/proxy.js';
 import { fetchOptimalAPI, fetchOptimalSubGeneratorData, generateRandomIPs } from './utils/doh.js';
 import { getXHTTPPaddingIdentifiers, handleXHTTPRequest } from './handlers/xhttp.js';
 import { handleGRPCRequest } from './handlers/grpc.js';
@@ -58,9 +42,7 @@ import { html1101, nginx } from './html/camouflage.js';
 import { loginPage } from './html/login.js';
 import { noAdminPage, noKVPage } from './html/errorPages.js';
 import { adminPage } from './html/admin.js';
-import { identifyISP, isIPHostname } from './utils/network.js';
-import { sstpConnect } from './core/sstp.js';
-import { turnConnect } from './core/turn.js';
+import { identifyISP } from './utils/network.js';
 
 export default {
 	async fetch(request, env, ctx) {
@@ -147,13 +129,6 @@ export default {
 			request.headers.get('X-Appengine-Remote-Addr') ||
 			request.headers.get('X-Cluster-Client-IP') ||
 			'unknownIP';
-		if (cachedSocks5Whitelist === null) {
-			if (env.GO2SOCKS5)
-				setSocks5Whitelist([
-					...new Set(socks5Whitelist.concat(await parseToArray(env.GO2SOCKS5))),
-				]);
-			setCachedSocks5Whitelist(socks5Whitelist);
-		} else setSocks5Whitelist(cachedSocks5Whitelist);
 		if (accessPath === 'version') {
 			// versionAPI
 			const requestUUID = (url.searchParams.get('uuid') || '').toLowerCase();
@@ -378,183 +353,7 @@ export default {
 							status: 403,
 							headers: { 'Content-Type': 'application/json;charset=utf-8' },
 						});
-					} else if (accessPath === 'admin/check') {
-						// proxyCheck
-						const proxyProtocol =
-							['socks5', 'http', 'https', 'turn', 'sstp'].find((type) =>
-								url.searchParams.has(type)
-							) || null;
-						if (!proxyProtocol)
-							return new Response(JSON.stringify({ error: 'Missing proxyParams' }), {
-								status: 400,
-								headers: { 'Content-Type': 'application/json;charset=utf-8' },
-							});
-						const proxyParams = url.searchParams.get(proxyProtocol);
-						const startTime = Date.now();
-						let fullProxyParams = proxyParams;
-						let checkProxyResponse;
-						let tcpSocket = null,
-							tlsSocket = null;
-						try {
-							const checkParsed = await getSOCKS5Account(
-								proxyParams,
-								getProxyDefaultPort(proxyProtocol)
-							);
-							const { username, password, hostname, port } = checkParsed;
-							fullProxyParams =
-								username && password
-									? `${username}:${password}@${hostname}:${port}`
-									: `${hostname}:${port}`;
-							const checkHost = 'cloudflare.com',
-								checkPort = 443,
-								encoder = new TextEncoder(),
-								decoder = new TextDecoder();
-							const tcpConnector = createRequestTCPConnector(request);
-							tcpSocket =
-								proxyProtocol === 'socks5'
-									? await socks5Connect(
-											checkHost,
-											checkPort,
-											new Uint8Array(0),
-											tcpConnector,
-											checkParsed
-										)
-									: proxyProtocol === 'turn'
-										? await turnConnect(
-												checkParsed,
-												checkHost,
-												checkPort,
-												tcpConnector
-											)
-										: proxyProtocol === 'sstp'
-											? await sstpConnect(
-													checkParsed,
-													checkHost,
-													checkPort,
-													tcpConnector
-												)
-											: proxyProtocol === 'https' &&
-												  isIPHostname(hostname)
-												? await httpsConnect(
-														checkHost,
-														checkPort,
-														new Uint8Array(0),
-														tcpConnector,
-														checkParsed
-													)
-												: await httpConnect(
-														checkHost,
-														checkPort,
-														new Uint8Array(0),
-														proxyProtocol === 'https',
-														tcpConnector,
-														checkParsed
-													);
-							if (!tcpSocket)
-								throw new Error('Cannot connect to proxy server');
-							tlsSocket = new TlsClient(tcpSocket, {
-								serverName: checkHost,
-								insecure: true,
-							});
-							await tlsSocket.handshake();
-							await tlsSocket.write(
-								encoder.encode(
-									`GET /cdn-cgi/trace HTTP/1.1\r\nHost: ${checkHost}\r\nUser-Agent: Mozilla/5.0\r\nConnection: close\r\n\r\n`
-								)
-							);
-							let responseBuffer = new Uint8Array(0),
-								headerEndIndex = -1,
-								contentLength = null,
-								chunked = false;
-							const maxResponseBytes = 64 * 1024;
-							while (responseBuffer.length < maxResponseBytes) {
-								const value = await tlsSocket.read();
-								if (!value) break;
-								if (value.byteLength === 0) continue;
-								responseBuffer = concatByteData(responseBuffer, value);
-								if (headerEndIndex === -1) {
-									const crlfcrlf = responseBuffer.findIndex(
-										(_, i) =>
-											i < responseBuffer.length - 3 &&
-											responseBuffer[i] === 0x0d &&
-											responseBuffer[i + 1] === 0x0a &&
-											responseBuffer[i + 2] === 0x0d &&
-											responseBuffer[i + 3] === 0x0a
-									);
-									if (crlfcrlf !== -1) {
-										headerEndIndex = crlfcrlf + 4;
-										const headers = decoder.decode(
-											responseBuffer.slice(0, headerEndIndex)
-										);
-										const statusLine = headers.split('\r\n')[0] || '';
-										const statusMatch =
-											statusLine.match(/HTTP\/\d\.\d\s+(\d+)/);
-										const statusCode = statusMatch
-											? parseInt(statusMatch[1], 10)
-											: NaN;
-										if (
-											!Number.isFinite(statusCode) ||
-											statusCode < 200 ||
-											statusCode >= 300
-										)
-											throw new Error(
-												`Proxy check request failed: ${statusLine || 'invalid response'}`
-											);
-										const lengthMatch = headers.match(
-											/\r\nContent-Length:\s*(\d+)/i
-										);
-										if (lengthMatch)
-											contentLength = parseInt(lengthMatch[1], 10);
-										chunked = /\r\nTransfer-Encoding:\s*chunked/i.test(
-											headers
-										);
-									}
-								}
-								if (
-									headerEndIndex !== -1 &&
-									contentLength !== null &&
-									responseBuffer.length >= headerEndIndex + contentLength
-								)
-									break;
-								if (
-									headerEndIndex !== -1 &&
-									chunked &&
-									decoder.decode(responseBuffer).includes('\r\n0\r\n\r\n')
-								)
-									break;
-							}
-							if (headerEndIndex === -1)
-								throw new Error(
-									'Proxy response header too long or invalid'
-								);
-							const response = decoder.decode(responseBuffer);
-							const ip = response.match(/(?:^|\n)ip=(.*)/)?.[1];
-							const loc = response.match(/(?:^|\n)loc=(.*)/)?.[1];
-							if (!ip || !loc) throw new Error('Proxy response invalid');
-							checkProxyResponse = {
-								success: true,
-								proxy: proxyProtocol + '://' + fullProxyParams,
-								ip,
-								loc,
-								responseTime: Date.now() - startTime,
-							};
-						} catch (error) {
-							checkProxyResponse = {
-								success: false,
-								error: error.message,
-								proxy: proxyProtocol + '://' + fullProxyParams,
-								responseTime: Date.now() - startTime,
-							};
-						} finally {
-							safeClose(tlsSocket);
-							safeClose(tcpSocket);
-						}
-						return new Response(JSON.stringify(checkProxyResponse, null, 2), {
-							status: 200,
-							headers: { 'Content-Type': 'application/json;charset=utf-8' },
-						});
 					}
-
 					setConfigJSON(await readConfigJSON(env, host, userID, UA));
 
 					if (accessPath === 'admin/init') {
@@ -792,20 +591,7 @@ export default {
 							);
 					const requestTOKEN = url.searchParams.get('token');
 					const userClientRequestingSub = requestTOKEN === subscriptionTOKEN;
-					const currentDayIndex = Math.floor(Date.now() / 86400000);
-					const subConverterTOKENSeed = base64SecretEncode(subscriptionTOKEN, userID);
-					const [todaySubConverterTOKEN, yesterdaySubConverterTOKEN] = await Promise.all([
-						MD5MD5(subConverterTOKENSeed + currentDayIndex),
-						MD5MD5(subConverterTOKENSeed + (currentDayIndex - 1)),
-					]);
-					const subConverterRequestingSub =
-						requestTOKEN === todaySubConverterTOKEN ||
-						requestTOKEN === yesterdaySubConverterTOKEN;
-					if (
-						userClientRequestingSub ||
-						subConverterRequestingSub ||
-						asOptimalSubGenerator
-					) {
+					if (userClientRequestingSub || asOptimalSubGenerator) {
 						setConfigJSON(await readConfigJSON(env, host, userID, UA));
 						if (asOptimalSubGenerator)
 							ctx.waitUntil(
@@ -838,17 +624,7 @@ export default {
 							responseHeaders['Subscription-Userinfo'] =
 								`upload=${pagesSum}; download=${workersSum}; total=${total}; expire=4102329600`; // 2099-12-31ExpiryTime
 						}
-						const isSubConverterRequest =
-							url.searchParams.has('b64') ||
-							url.searchParams.has('base64') ||
-							request.headers.get('subconverter-request') ||
-							request.headers.get('subconverter-version') ||
-							ua.includes('subconverter') ||
-							ua.includes('CF-Workers-SUB'.toLowerCase()) ||
-							asOptimalSubGenerator;
-						const subscriptionType = isSubConverterRequest
-							? 'mixed'
-							: url.searchParams.has('target')
+						const subscriptionType = url.searchParams.has('target')
 								? url.searchParams.get('target')
 								: url.searchParams.has('clash') ||
 									  ua.includes('clash') ||
@@ -990,7 +766,7 @@ export default {
 										? mergedOtherNodeArray.join('\n') + '\n'
 										: '';
 								const optimalAPIIPs = fetchOptimalAPIResult[0];
-								proxyIPPool = fetchOptimalAPIResult[3] || [];
+								proxyIPPool = fetchOptimalAPIResult[2] || [];
 								fullOptimalIPs = [...new Set(optimalIP.concat(optimalAPIIPs))];
 							} else {
 								// optimalSubscriptionGenerator
@@ -1041,31 +817,7 @@ export default {
 
 										let fullNodePath = config_JSON.fullNodePath;
 
-										const chainProxyMatch = nodeRemark.match(
-											/\$(socks5|http|https|turn|sstp):\/\/([^#\s]+)/i
-										);
-										if (chainProxyMatch) {
-											try {
-												const proxyProtocol =
-														chainProxyMatch[1].toLowerCase(),
-													proxyParams = chainProxyMatch[2];
-												const chainProxyData = {
-													type: proxyProtocol,
-													...getSOCKS5Account(
-														proxyParams,
-														getProxyDefaultPort(proxyProtocol)
-													),
-												};
-												fullNodePath = `/video/${base64SecretEncode(JSON.stringify(chainProxyData), userID) + (config_JSON.enable0RTT ? '?ed=2560' : '')}`;
-												nodeRemark =
-													nodeRemark
-														.replace(chainProxyMatch[0], '')
-														.trim() || nodeAddress;
-											} catch (error) {
-												console.warn(
-													`[subscriptionContent] Chain proxy parse failed，instructionIgnored: ${chainProxyMatch[0]} (${error && error.message ? error.message : error})`
-												);
-											}
+										if (proxyIPPool.length > 0) {
 										} else if (proxyIPPool.length > 0) {
 											const matchedProxyIP = proxyIPPool.find((p) =>
 												p.includes(nodeAddress)
@@ -1151,10 +903,9 @@ export default {
 													: fullNodePath +
 														'?enc=' +
 														config_JSON.SS.cipherMethod
-											).replace(/([=,])/g, '\\$1');
-											if (!isSubConverterRequest)
-												fullNodePath = fullNodePath + ';mux=0';
-											return `${protocolType}://${btoa(config_JSON.SS.cipherMethod + ':00000000-0000-4000-8000-000000000000')}@${nodeAddress}:${nodePort}?plugin=v2${encodeURIComponent('ray-plugin;mode=websocket;host=example.com;path=' + (config_JSON.randomPath ? randomPath(fullNodePath) : fullNodePath) + (config_JSON.SS.TLS ? ';tls' : '')) + echLinkParam + tlsFragmentParam}#${encodeURIComponent(nodeRemark)}`;
+										).replace(/([=,])/g, '\\$1');
+										fullNodePath = fullNodePath + ';mux=0';
+										return `${protocolType}://${btoa(config_JSON.SS.cipherMethod + ':00000000-0000-4000-8000-000000000000')}@${nodeAddress}:${nodePort}?plugin=v2${encodeURIComponent('ray-plugin;mode=websocket;host=example.com;path=' + (config_JSON.randomPath ? randomPath(fullNodePath) : fullNodePath) + (config_JSON.SS.TLS ? ';tls' : '')) + echLinkParam + tlsFragmentParam}#${encodeURIComponent(nodeRemark)}`;
 										} else {
 											const transportPathParamValue =
 												getTransportPathParamValue(
@@ -1167,49 +918,9 @@ export default {
 									})
 									.filter((item) => item !== null)
 									.join('\n');
-						} else {
-							// subscriptionConversion
-							const subConverterURL = `${config_JSON.subConverterConfig.SUBAPI}/sub?target=${subscriptionType}&url=${encodeURIComponent(url.protocol + '//' + url.host + '/sub?target=mixed&token=' + todaySubConverterTOKEN + '&cnIspCode=' + identifyISP(request) + (url.searchParams.has('sub') && url.searchParams.get('sub') != '' ? `&sub=${url.searchParams.get('sub')}` : ''))}&config=${encodeURIComponent(config_JSON.subConverterConfig.SUBCONFIG)}&emoji=${config_JSON.subConverterConfig.SUBEMOJI}&list=${config_JSON.subConverterConfig.SUBLIST}&scv=${config_JSON.skipCertVerify}&xudp=${config_JSON.subConverterConfig.XUDP}&udp=${config_JSON.subConverterConfig.UDP}&tls13=${config_JSON.subConverterConfig.TLS13}&append_type=${config_JSON.subConverterConfig.APPEND_TYPE}&sort=${config_JSON.subConverterConfig.SORT}`;
-							try {
-								const response = await fetch(subConverterURL, {
-									headers: {
-										'User-Agent':
-											'Subconverter for ' +
-											subscriptionType +
-											' edge' +
-											'tunnel (https://github.com/' +
-											featureCodeDict[1] +
-											'/edge' +
-											'tunnel)',
-									},
-								});
-								if (response.ok) {
-									subscriptionContent = await response.text();
-									if (url.searchParams.has('surge') || ua.includes('surge'))
-										subscriptionContent = surgeSubscriptionHotPatch(
-											subscriptionContent,
-											url.protocol +
-												'//' +
-												url.host +
-												'/sub?token=' +
-												subscriptionTOKEN +
-												'&surge',
-											config_JSON
-										);
-								} else
-									return new Response(
-										'Sub converter backend error: ' + response.statusText,
-										{ status: response.status }
-									);
-							} catch (error) {
-								return new Response(
-									'Sub converter backend error: ' + error.message,
-									{ status: 403 }
-								);
-							}
 						}
 
-						if (!ua.includes('subconverter') && userClientRequestingSub) {
+						if (userClientRequestingSub) {
 							const shuffledHOSTS = [...config_JSON.HOSTS].sort(
 								() => Math.random() - 0.5
 							);

@@ -7,17 +7,14 @@ import {
 	PROXY_CONCURRENT_DIAL_COUNT,
 	TCP_CONCURRENT_DIAL_COUNT,
 	preloadRaceDial,
-	socks5Whitelist,
 } from '../state.js';
 import { featureCodeDict } from '../constants.js';
 import { connectStreams } from './grain.js';
 import { connectTrojanProxy, extractTrojanProxyHandshakeData } from './protocol.js';
-import { createRequestTCPConnector, httpConnect, httpsConnect, socks5Connect } from './proxy.js';
+import { createRequestTCPConnector } from './proxy.js';
 import { doHQuery, resolveAddressPort } from '../utils/doh.js';
 import { getValidDataLength, log, toUint8Array } from '../utils/helpers.js';
 import { isDestinationSafe, isIPHostname, isIPv4 } from '../utils/network.js';
-import { sstpConnect } from './sstp.js';
-import { turnConnect } from './turn.js';
 
 
 export async function forwardTCP(
@@ -40,15 +37,11 @@ export async function forwardTCP(
 		return false;
 	}
 	const ctxproxyIP = proxyContext.proxyIP || '';
-	const ctxproxyType = proxyContext.proxyType !== undefined ? proxyContext.proxyType : null;
-	const ctxproxyGlobal =
-		proxyContext.proxyGlobal !== undefined ? proxyContext.proxyGlobal : false;
-	const ctxproxyParams = proxyContext.proxyParams || {};
 	const ctxproxyFallback =
 		proxyContext.proxyFallback !== undefined ? proxyContext.proxyFallback : true;
 	let proxyArrayIndex = 0;
 	log(
-		`[TCPforward] target: ${host}:${portNum} | proxyIP: ${ctxproxyIP} | proxyFallback: ${ctxproxyFallback ? 'yes' : 'no'} | proxyType: ${ctxproxyType || 'proxyip'} | global: ${ctxproxyGlobal ? 'yes' : 'no'}`
+		`[TCPforward] target: ${host}:${portNum} | proxyIP: ${ctxproxyIP} | proxyFallback: ${ctxproxyFallback ? 'yes' : 'no'}`
 	);
 	const CONNECTION_TIMEOUT_MS = 1000;
 	let firstPacketSentViaProxy = false;
@@ -362,69 +355,6 @@ export async function forwardTCP(
 						tcpConnector,
 						trojanProxyTarget
 					);
-				} else if (ctxproxyType === 'socks5') {
-					log(`[SOCKS5proxy] proxyTo: ${host}:${portNum}`);
-					newSocket = await socks5Connect(
-						host,
-						portNum,
-						currentFirstPacketData,
-						tcpConnector,
-						ctxproxyParams
-					);
-				} else if (ctxproxyType === 'http') {
-					log(`[HTTPproxy] proxyTo: ${host}:${portNum}`);
-					newSocket = await httpConnect(
-						host,
-						portNum,
-						currentFirstPacketData,
-						false,
-						tcpConnector,
-						ctxproxyParams
-					);
-				} else if (ctxproxyType === 'https') {
-					log(`[HTTPSproxy] proxyTo: ${host}:${portNum}`);
-					newSocket = isIPHostname(ctxproxyParams.hostname)
-						? await httpsConnect(
-								host,
-								portNum,
-								currentFirstPacketData,
-								tcpConnector,
-								ctxproxyParams
-							)
-						: await httpConnect(
-								host,
-								portNum,
-								currentFirstPacketData,
-								true,
-								tcpConnector,
-								ctxproxyParams
-							);
-				} else if (ctxproxyType === 'turn') {
-					log(`[TURNproxy] proxyTo: ${host}:${portNum}`);
-					newSocket = await turnConnect(ctxproxyParams, host, portNum, tcpConnector);
-					if (getValidDataLength(currentFirstPacketData) > 0) {
-						const writer = newSocket.writable.getWriter();
-						try {
-							await writer.write(toUint8Array(currentFirstPacketData));
-						} finally {
-							try {
-								writer.releaseLock();
-							} catch {}
-						}
-					}
-				} else if (ctxproxyType === 'sstp') {
-					log(`[SSTPproxy] proxyTo: ${host}:${portNum}`);
-					newSocket = await sstpConnect(ctxproxyParams, host, portNum, tcpConnector);
-					if (getValidDataLength(currentFirstPacketData) > 0) {
-						const writer = newSocket.writable.getWriter();
-						try {
-							await writer.write(toUint8Array(currentFirstPacketData));
-						} finally {
-							try {
-								writer.releaseLock();
-							} catch {}
-						}
-					}
 				} else {
 					log(`[Proxy Connection] proxyTo: ${host}:${portNum}`);
 					const allProxyArray = await resolveAddressPort(ctxproxyIP, host, yourUUID);
@@ -464,52 +394,36 @@ export async function forwardTCP(
 		}
 	}
 	remoteConnWrapper.retryConnect = async () => connecttoPry(!firstPacketSentViaProxy);
-
-	if (
-		ctxproxyType &&
-		(ctxproxyGlobal ||
-			socks5Whitelist.some((p) => new RegExp(`^${p.replace(/\*/g, '.*')}$`, 'i').test(host)))
-	) {
-		log(`[TCPforward] enable SOCKS5/HTTP/HTTPS/TURN/SSTP global proxy`);
-		try {
-			await connecttoPry();
-			if (connectOnly) return remoteConnWrapper.socket;
-		} catch (err) {
-			log(`[TCPforward] SOCKS5/HTTP/HTTPS/TURN/SSTP proxy connection failed: ${err.message}`);
+	let directGeneration = remoteConnWrapper.generation;
+	try {
+		log(`[TCPforward] try direct connect to: ${host}:${portNum}`);
+		const generationConnection = startTCPConnectorGeneration(remoteConnWrapper);
+		directGeneration = generationConnection.generation;
+		const initialSocket = await connectDirect(host, portNum, rawData, true);
+		await installCurrentConnection(
+			initialSocket,
+			directGeneration,
+			generationConnection.downlinkDrain,
+			async () => {
+				if (
+					remoteConnWrapper.generation !== directGeneration ||
+					remoteConnWrapper.socket !== initialSocket
+				)
+					return;
+				await connecttoPry();
+			}
+		);
+		if (connectOnly) return initialSocket;
+	} catch (err) {
+		log(`[TCPforward] direct connect ${host}:${portNum} failed: ${err.message}`);
+		if (remoteConnWrapper.generation !== directGeneration) throw err;
+		if (err instanceof Error && err.name === 'preload parseisEmpty') {
+			closeSocketQuietly(ws);
 			throw err;
 		}
-	} else {
-		let directGeneration = remoteConnWrapper.generation;
-		try {
-			log(`[TCPforward] try direct connect to: ${host}:${portNum}`);
-			const generationConnection = startTCPConnectorGeneration(remoteConnWrapper);
-			directGeneration = generationConnection.generation;
-			const initialSocket = await connectDirect(host, portNum, rawData, true);
-			await installCurrentConnection(
-				initialSocket,
-				directGeneration,
-				generationConnection.downlinkDrain,
-				async () => {
-					if (
-						remoteConnWrapper.generation !== directGeneration ||
-						remoteConnWrapper.socket !== initialSocket
-					)
-						return;
-					await connecttoPry();
-				}
-			);
-			if (connectOnly) return initialSocket;
-		} catch (err) {
-			log(`[TCPforward] direct connect ${host}:${portNum} failed: ${err.message}`);
-			if (remoteConnWrapper.generation !== directGeneration) throw err;
-			if (err instanceof Error && err.name === 'preload parseisEmpty') {
-				closeSocketQuietly(ws);
-				throw err;
-			}
-			if (ws.readyState !== WebSocket.OPEN) throw err;
-			await connecttoPry();
-			if (connectOnly) return remoteConnWrapper.socket;
-		}
+		if (ws.readyState !== WebSocket.OPEN) throw err;
+		await connecttoPry();
+		if (connectOnly) return remoteConnWrapper.socket;
 	}
 }
 export async function forwardUDP(udpChunk, webSocket, respHeader, request, responseWrapper = null) {

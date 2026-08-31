@@ -630,8 +630,6 @@ export function adminPage() {
 			<button class="tab-btn active" onclick="switchTab('nodes', this)">📋 Node Links & Subscriptions</button>
 			<button class="tab-btn" onclick="switchTab('network', this)">🌐 Cloudflare & Network</button>
 			<button class="tab-btn" onclick="switchTab('generator', this)">⚡ Optimal Subscriptions</button>
-			<button class="tab-btn" onclick="switchTab('subconverter', this)">🔄 Subconverter</button>
-			<button class="tab-btn" onclick="switchTab('proxy', this)">🔀 Reverse & Chained Proxy</button>
 			<button class="tab-btn" onclick="switchTab('cloudflare', this)">☁️ Cloudflare API</button>
 			<button class="tab-btn" onclick="switchTab('logs', this)">📜 Operation Logs</button>
 		</div>
@@ -867,116 +865,7 @@ export function adminPage() {
 			</div>
 		</div>
 
-		<!-- Tab 4: Subconverter -->
-		<div id="tab-subconverter" class="tab-panel">
-			<div class="card">
-				<div class="card-header">
-					<div>
-						<div class="card-title">🔄 Subscription Conversion Service</div>
-						<div class="card-desc">Configure subconverter backend rules and output options</div>
-					</div>
-				</div>
-				<div class="form-grid">
-					<div class="form-group" style="grid-column: 1 / -1;">
-						<label class="form-label">Subconverter API Backend</label>
-						<input type="text" class="form-control" id="cfg-subApi" placeholder="https://api.v1.mk">
-					</div>
-					<div class="form-group" style="grid-column: 1 / -1;">
-						<label class="form-label">Remote Rule Configuration File (ACL4SSR)</label>
-						<input type="text" class="form-control" id="cfg-subConfig" placeholder="https://raw.githubusercontent.com/...">
-					</div>
-				</div>
-
-				<div class="form-grid" style="margin-top: 0.5rem;">
-					<div class="toggle-group">
-						<div class="toggle-info">
-							<div class="toggle-title">Include Node Flag Emojis</div>
-							<div class="toggle-desc">Automatically add country flags (SUBEMOJI)</div>
-						</div>
-						<label class="switch">
-							<input type="checkbox" id="cfg-subEmoji">
-							<span class="slider"></span>
-						</label>
-					</div>
-					<div class="toggle-group">
-						<div class="toggle-info">
-							<div class="toggle-title">Enable UDP Forwarding</div>
-							<div class="toggle-desc">Allow UDP traffic through converted nodes</div>
-						</div>
-						<label class="switch">
-							<input type="checkbox" id="cfg-subUdp">
-							<span class="slider"></span>
-						</label>
-					</div>
-					<div class="toggle-group">
-						<div class="toggle-info">
-							<div class="toggle-title">Enable TLS 1.3</div>
-							<div class="toggle-desc">Force TLS 1.3 protocol support in client configs</div>
-						</div>
-						<label class="switch">
-							<input type="checkbox" id="cfg-subTls13">
-							<span class="slider"></span>
-						</label>
-					</div>
-					<div class="toggle-group">
-						<div class="toggle-info">
-							<div class="toggle-title">Sort Nodes by Latency/Name</div>
-							<div class="toggle-desc">Enable alphabetical node sorting</div>
-						</div>
-						<label class="switch">
-							<input type="checkbox" id="cfg-subSort">
-							<span class="slider"></span>
-						</label>
-					</div>
-				</div>
-			</div>
-		</div>
-
-		<!-- Tab 5: Reverse & Chained Proxy -->
-		<div id="tab-proxy" class="tab-panel">
-			<div class="card">
-				<div class="card-header">
-					<div>
-						<div class="card-title">🔀 Reverse Proxy & Outbound SOCKS5 Settings</div>
-						<div class="card-desc">Configure outbound proxy forwarding to bypass Cloudflare CDN limitations</div>
-					</div>
-				</div>
-				<div class="form-grid">
-					<div class="form-group">
-						<label class="form-label">Default Outbound Mode</label>
-						<select id="cfg-proxyMode">
-							<option value="auto">Auto (Direct connect or path specified)</option>
-							<option value="socks5">SOCKS5 Outbound Proxy</option>
-							<option value="http">HTTP Outbound Proxy</option>
-						</select>
-					</div>
-					<div class="form-group">
-						<label class="form-label">SOCKS5 Proxy Account (user:pass@host:port)</label>
-						<input type="text" class="form-control" id="cfg-socks5Account" placeholder="user:pass@ip:port">
-					</div>
-					<div class="form-group" style="grid-column: 1 / -1;">
-						<label class="form-label">SOCKS5 Target Whitelist (comma separated)</label>
-						<input type="text" class="form-control" id="cfg-socks5Whitelist" placeholder="google.com, chatgpt.com">
-					</div>
-				</div>
-			</div>
-
-			<div class="card">
-				<div class="card-header">
-					<div>
-						<div class="card-title">🔍 Proxy Connectivity Diagnostic Tool</div>
-						<div class="card-desc">Test whether an outbound proxy IP/port is reachable from Cloudflare Workers</div>
-					</div>
-				</div>
-				<div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-					<input type="text" class="form-control" id="test-proxy-input" placeholder="socks5://user:pass@ip:port or http://ip:port" style="flex: 1; min-width: 280px;">
-					<button class="btn btn-primary" onclick="testProxyConnectivity()">⚡ Test Reachability</button>
-				</div>
-				<div id="proxy-test-result" style="display: none; padding: 1rem; background: rgba(15, 23, 42, 0.8); border-radius: var(--radius-sm); border: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;"></div>
-			</div>
-		</div>
-
-		<!-- Tab 6: Cloudflare API -->
+				<!-- Tab 6: Cloudflare API -->
 		<div id="tab-cloudflare" class="tab-panel">
 			<div class="card">
 				<div class="card-header">
@@ -1165,21 +1054,6 @@ export function adminPage() {
 			document.getElementById('cfg-randomCount').value = opt.localIPDB?.randomCount || 16;
 			document.getElementById('cfg-specifiedPort').value = opt.localIPDB?.specifiedPort ?? -1;
 
-			// Tab 4: Subconverter
-			const sc = cfg.subConverterConfig || {};
-			document.getElementById('cfg-subApi').value = sc.SUBAPI || '';
-			document.getElementById('cfg-subConfig').value = sc.SUBCONFIG || '';
-			document.getElementById('cfg-subEmoji').checked = !!sc.SUBEMOJI;
-			document.getElementById('cfg-subUdp').checked = !!sc.UDP;
-			document.getElementById('cfg-subTls13').checked = !!sc.TLS13;
-			document.getElementById('cfg-subSort').checked = !!sc.SORT;
-
-			// Tab 5: Proxy
-			const px = cfg.proxy || {};
-			document.getElementById('cfg-proxyMode').value = px.SOCKS5?.enable ? 'socks5' : 'auto';
-			document.getElementById('cfg-socks5Account').value = px.SOCKS5?.account || '';
-			document.getElementById('cfg-socks5Whitelist').value = (px.SOCKS5?.whitelist || []).join(', ');
-
 			// Tab 6: Cloudflare
 			document.getElementById('cfg-cfEmail').value = cfg.CF?.Email || '';
 			document.getElementById('cfg-cfApiKey').value = cfg.CF?.GlobalAPIKey || '';
@@ -1212,21 +1086,6 @@ export function adminPage() {
 				currentConfig.optSubGenerator.localIPDB = currentConfig.optSubGenerator.localIPDB || {};
 				currentConfig.optSubGenerator.localIPDB.randomCount = parseInt(document.getElementById('cfg-randomCount').value, 10) || 16;
 				currentConfig.optSubGenerator.localIPDB.specifiedPort = parseInt(document.getElementById('cfg-specifiedPort').value, 10);
-
-				currentConfig.subConverterConfig = currentConfig.subConverterConfig || {};
-				currentConfig.subConverterConfig.SUBAPI = document.getElementById('cfg-subApi').value;
-				currentConfig.subConverterConfig.SUBCONFIG = document.getElementById('cfg-subConfig').value;
-				currentConfig.subConverterConfig.SUBEMOJI = document.getElementById('cfg-subEmoji').checked;
-				currentConfig.subConverterConfig.UDP = document.getElementById('cfg-subUdp').checked;
-				currentConfig.subConverterConfig.TLS13 = document.getElementById('cfg-subTls13').checked;
-				currentConfig.subConverterConfig.SORT = document.getElementById('cfg-subSort').checked;
-
-				currentConfig.proxy = currentConfig.proxy || {};
-				currentConfig.proxy.SOCKS5 = currentConfig.proxy.SOCKS5 || {};
-				currentConfig.proxy.SOCKS5.enable = document.getElementById('cfg-proxyMode').value === 'socks5' ? 'SOCKS5' : null;
-				currentConfig.proxy.SOCKS5.account = document.getElementById('cfg-socks5Account').value;
-				currentConfig.proxy.SOCKS5.whitelist = document.getElementById('cfg-socks5Whitelist').value
-					.split(',').map(s => s.trim()).filter(Boolean);
 
 				const res = await fetch('/admin/config.json', {
 					method: 'POST',
@@ -1333,29 +1192,6 @@ export function adminPage() {
 				}
 			} catch (e) {
 				showToast('Failed to clear logs', 'error');
-			}
-		}
-
-		// Test Proxy Reachability
-		async function testProxyConnectivity() {
-			const input = document.getElementById('test-proxy-input').value.trim();
-			if (!input) return showToast('Please enter a proxy string to test', 'error');
-
-			const resBox = document.getElementById('proxy-test-result');
-			resBox.style.display = 'block';
-			resBox.innerHTML = '⏳ Testing connectivity to ' + input + '...';
-
-			try {
-				const res = await fetch('/admin/check?proxy=' + encodeURIComponent(input));
-				const data = await res.json();
-				if (data.success) {
-					resBox.innerHTML = '<span style="color: var(--success);">✔ Reachable!</span> Response time: <strong>' + data.responseTime + 'ms</strong><br>' +
-						'Egress IP: ' + data.ip + ' | Location: ' + data.loc;
-				} else {
-					resBox.innerHTML = '<span style="color: var(--danger);">✖ Connection Failed:</span> ' + (data.error || 'Unknown error');
-				}
-			} catch (err) {
-				resBox.innerHTML = '<span style="color: var(--danger);">✖ Error:</span> ' + err.message;
 			}
 		}
 
