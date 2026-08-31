@@ -53,54 +53,6 @@ export {
 	surgeSubscriptionHotPatch,
 } from '../subscription/generator.js';
 
-
-export async function logRequest(
-	env,
-	request,
-	accessIP,
-	requestType = 'Get_SUB',
-	config_JSON,
-	writeKVLog = true
-) {
-	try {
-		const currentTime = new Date();
-		const logEntry = {
-			TYPE: requestType,
-			IP: accessIP,
-			ASN: `AS${request.cf.asn || '0'} ${request.cf.asOrganization || 'Unknown'}`,
-			CC: `${request.cf.country || 'N/A'} ${request.cf.city || 'N/A'}`,
-			URL: request.url,
-			UA: request.headers.get('User-Agent') || 'Unknown',
-			TIME: currentTime.getTime(),
-		};
-		writeKVLog = ['1', 'true'].includes(env.OFF_LOG) ? false : writeKVLog;
-		if (!writeKVLog) return;
-		let logArray = [];
-		const existingLogs = await env.KV.get('log.json'),
-			KVcapacityLimit = 4; //MB
-		if (existingLogs) {
-			const parsedLogs = tryParseJSON(existingLogs);
-			if (!Array.isArray(parsedLogs)) {
-				logArray = [logEntry];
-			} else {
-				logArray = parsedLogs;
-				logArray.push(logEntry);
-				while (
-					JSON.stringify(logArray, null, 2).length > KVcapacityLimit * 1024 * 1024 &&
-					logArray.length > 0
-				) {
-					logArray.shift();
-				}
-			}
-		} else {
-			logArray = [logEntry];
-		}
-		await env.KV.put('log.json', JSON.stringify(logArray, null, 2));
-	} catch (error) {
-		console.error(`log recording failed: ${error.message}`);
-	}
-}
-
 export function maskSensitiveInfo(text, prefixlength = 3, suffixlength = 2) {
 	if (!text || typeof text !== 'string') return text;
 	if (text.length <= prefixlength + suffixlength) return text; // iflengthtooShort，return directly
@@ -130,7 +82,7 @@ export async function readConfigJSON(
 			HOSTS: [hostname],
 			UUID: userID,
 			PATH: '/',
-			protocolType: 'v' + 'le' + 'ss',
+			protocolType: 'all',
 			transportProtocol: 'ws',
 			gRPCmode: 'gun',
 			gRPCUserAgent: UA,
@@ -149,15 +101,10 @@ export async function readConfigJSON(
 			},
 			Fingerprint: 'chrome',
 			optSubGenerator: {
-				local: true, // true: local-basedOptimalAddress  false: optimalSubscriptionGenerator
 				localIPDB: {
-					randomIP: true, // whenRandomIPIs true, enableRandomIPCount, otherwiseUseKVADD.txt
-					randomCount: 16,
 					specifiedPort: -1,
 				},
-				SUB: null,
 				SUBNAME: 'edge' + 'tunnel',
-				SUBUpdateTime: 3, // subscriptionUpdateTime（hours）
 				TOKEN: await MD5MD5(hostname + userID),
 			},
 			CF: {
@@ -246,24 +193,42 @@ export async function readConfigJSON(
 		config_JSON,
 		config_JSON.fullNodePath
 	);
-	config_JSON.LINK =
-		config_JSON.protocolType === 'ss'
-			? `${config_JSON.protocolType}://${btoa(config_JSON.SS.cipherMethod + ':' + userID)}@${host}:${config_JSON.SS.TLS ? '443' : '80'}?plugin=v2${encodeURIComponent(`ray-plugin;mode=websocket;host=${host};path=${(config_JSON.fullNodePath.includes('?') ? config_JSON.fullNodePath.replace('?', '?enc=' + config_JSON.SS.cipherMethod + '&') : config_JSON.fullNodePath + '?enc=' + config_JSON.SS.cipherMethod) + (config_JSON.SS.TLS ? ';tls' : '')};mux=0`) + echLinkParam}#${encodeURIComponent(config_JSON.optSubGenerator.SUBNAME)}`
-			: config_JSON.protocolType === 'vmess'
-				? generateVMessLink({
-						host,
-						port: 443,
-						uuid: userID,
-						security: 'auto',
-						net: transportProtocol.includes('grpc') ? 'grpc' : 'ws',
-						path: transportPathParamValue,
-						hostHeader: host,
-						tls: 'tls',
-						sni: host,
-						fp: config_JSON.Fingerprint,
-						ps: config_JSON.optSubGenerator.SUBNAME,
-					})
-				: `${config_JSON.protocolType}://${userID}@${host}:443?security=tls&type=${transportProtocol + echLinkParam}&${domainFieldName}=${host}&fp=${config_JSON.Fingerprint}&sni=${host}&${pathFieldName}=${encodeURIComponent(transportPathParamValue) + tlsFragmentParam}&encryption=none#${encodeURIComponent(config_JSON.optSubGenerator.SUBNAME)}`;
+	const generateSingleProtocolLink = (proto, suffix = '') => {
+		const subName = config_JSON.optSubGenerator.SUBNAME + (suffix ? ` - ${suffix}` : '');
+		if (proto === 'ss') {
+			return `ss://${btoa(config_JSON.SS.cipherMethod + ':' + userID)}@${host}:${config_JSON.SS.TLS ? '443' : '80'}?plugin=v2${encodeURIComponent(`ray-plugin;mode=websocket;host=${host};path=${(config_JSON.fullNodePath.includes('?') ? config_JSON.fullNodePath.replace('?', '?enc=' + config_JSON.SS.cipherMethod + '&') : config_JSON.fullNodePath + '?enc=' + config_JSON.SS.cipherMethod) + (config_JSON.SS.TLS ? ';tls' : '')};mux=0`) + echLinkParam}#${encodeURIComponent(subName)}`;
+		}
+		if (proto === 'vmess') {
+			return generateVMessLink({
+				host,
+				port: 443,
+				uuid: userID,
+				security: 'auto',
+				net: transportProtocol.includes('grpc') ? 'grpc' : 'ws',
+				path: transportPathParamValue,
+				hostHeader: host,
+				tls: 'tls',
+				sni: host,
+				fp: config_JSON.Fingerprint,
+				ps: subName,
+			});
+		}
+		if (proto === 'trojan') {
+			return `trojan://${userID}@${host}:443?security=tls&type=${transportProtocol + echLinkParam}&${domainFieldName}=${host}&fp=${config_JSON.Fingerprint}&sni=${host}&${pathFieldName}=${encodeURIComponent(transportPathParamValue) + tlsFragmentParam}#${encodeURIComponent(subName)}`;
+		}
+		return `vless://${userID}@${host}:443?security=tls&type=${transportProtocol + echLinkParam}&${domainFieldName}=${host}&fp=${config_JSON.Fingerprint}&sni=${host}&${pathFieldName}=${encodeURIComponent(transportPathParamValue) + tlsFragmentParam}&encryption=none#${encodeURIComponent(subName)}`;
+	};
+
+	if (config_JSON.protocolType === 'all') {
+		config_JSON.LINK = [
+			generateSingleProtocolLink('vless', 'VLESS'),
+			generateSingleProtocolLink('trojan', 'Trojan'),
+			generateSingleProtocolLink('vmess', 'VMess'),
+			generateSingleProtocolLink('ss', 'SS'),
+		].join('\n');
+	} else {
+		config_JSON.LINK = generateSingleProtocolLink(config_JSON.protocolType || 'vless');
+	}
 	config_JSON.optSubGenerator.TOKEN = await MD5MD5(hostname + userID);
 
 	const initCF_JSON = {
@@ -312,8 +277,6 @@ export async function readConfigJSON(
 
 	if (config_JSON.optSubGenerator) {
 		config_JSON.optSubGenerator.localIPDB = config_JSON.optSubGenerator.localIPDB || {
-			randomIP: true,
-			randomCount: 16,
 			specifiedPort: -1,
 		};
 	}

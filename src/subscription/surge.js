@@ -26,7 +26,7 @@ export function surgeSubscriptionHotPatch(content, url, config_JSON) {
 		}
 	}
 
-	const interval = (config_JSON?.optSubGenerator?.SUBUpdateTime || 12) * 60 * 60;
+	const interval = 12 * 60 * 60;
 	outputContent =
 		`#!MANAGED-CONFIG ${url} interval=${interval} strict=false` +
 		outputContent.substring(outputContent.indexOf('\n'));

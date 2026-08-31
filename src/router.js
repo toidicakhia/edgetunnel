@@ -22,7 +22,6 @@ import {
 	getCloudflareUsage,
 	getTransportPathParamValue,
 	getTransportProtocolConfig,
-	logRequest,
 	readConfigJSON,
 	singboxSubscriptionHotPatch,
 } from './utils/config.js';
@@ -33,7 +32,7 @@ import {
 	replaceWildcardWithRandomChars,
 } from './utils/helpers.js';
 import { getProxyParams } from './core/proxy.js';
-import { fetchOptimalAPI, fetchOptimalSubGeneratorData, generateRandomIPs } from './utils/doh.js';
+import { fetchOptimalAPI, generateRandomIPs } from './utils/doh.js';
 import { getXHTTPPaddingIdentifiers, handleXHTTPRequest } from './handlers/xhttp.js';
 import { handleGRPCRequest } from './handlers/grpc.js';
 import { handleWSRequest } from './handlers/ws.js';
@@ -279,14 +278,7 @@ export default {
 							status: 302,
 							headers: { Location: '/login' },
 						});
-					if (accessPath === 'admin/log.json') {
-						// logContent
-						const logContent = (await env.KV.get('log.json')) || '[]';
-						return new Response(logContent, {
-							status: 200,
-							headers: { 'Content-Type': 'application/json;charset=utf-8' },
-						});
-					} else if (caseSensitiveAccessPath === 'admin/getCloudflareUsage') {
+					if (caseSensitiveAccessPath === 'admin/getCloudflareUsage') {
 						// queryUsage
 						try {
 							const Usage_JSON = await getCloudflareUsage(
@@ -359,9 +351,6 @@ export default {
 					if (accessPath === 'admin/init') {
 						try {
 							setConfigJSON(await readConfigJSON(env, host, userID, UA, true));
-							ctx.waitUntil(
-								logRequest(env, request, accessIP, 'Init_Config', config_JSON)
-							);
 							config_JSON.init = 'Config reset to defaults';
 							return new Response(JSON.stringify(config_JSON, null, 2), {
 								status: 200,
@@ -397,9 +386,6 @@ export default {
 
 								// save to KV
 								await env.KV.put('config.json', JSON.stringify(newConfig, null, 2));
-								ctx.waitUntil(
-									logRequest(env, request, accessIP, 'Save_Config', config_JSON)
-								);
 								return new Response(
 									JSON.stringify({ success: true, message: 'Config saved' }),
 									{
@@ -459,9 +445,6 @@ export default {
 
 								// save to KV
 								await env.KV.put('cf.json', JSON.stringify(CF_JSON, null, 2));
-								ctx.waitUntil(
-									logRequest(env, request, accessIP, 'Save_Config', config_JSON)
-								);
 								return new Response(
 									JSON.stringify({ success: true, message: 'Config saved' }),
 									{
@@ -490,15 +473,6 @@ export default {
 							try {
 								const customIPs = await request.text();
 								await env.KV.put('ADD.txt', customIPs); // saveToKV
-								ctx.waitUntil(
-									logRequest(
-										env,
-										request,
-										accessIP,
-										'Save_Custom_IPs',
-										config_JSON
-									)
-								);
 								return new Response(
 									JSON.stringify({ success: true, message: 'Custom IPs saved' }),
 									{
@@ -543,8 +517,8 @@ export default {
 							localOptimalIP = (
 								await generateRandomIPs(
 									request,
-									config_JSON.optSubGenerator.localIPDB.randomCount,
-									config_JSON.optSubGenerator.localIPDB.specifiedPort
+									16,
+									config_JSON.optSubGenerator?.localIPDB?.specifiedPort ?? -1
 								)
 							)[1];
 						return new Response(localOptimalIP, {
@@ -562,7 +536,6 @@ export default {
 						});
 					}
 
-					ctx.waitUntil(logRequest(env, request, accessIP, 'Admin_Login', config_JSON));
 					return new Response(adminPage(), {
 						status: 200,
 						headers: {
@@ -593,25 +566,10 @@ export default {
 					const userClientRequestingSub = requestTOKEN === subscriptionTOKEN;
 					if (userClientRequestingSub || asOptimalSubGenerator) {
 						setConfigJSON(await readConfigJSON(env, host, userID, UA));
-						if (asOptimalSubGenerator)
-							ctx.waitUntil(
-								logRequest(
-									env,
-									request,
-									accessIP,
-									'Get_Best_SUB',
-									config_JSON,
-									false
-								)
-							);
-						else
-							ctx.waitUntil(
-								logRequest(env, request, accessIP, 'Get_SUB', config_JSON)
-							);
 						const ua = UA.toLowerCase();
 						const responseHeaders = {
 							'content-type': 'text/plain; charset=utf-8',
-							'Profile-Update-Interval': config_JSON.optSubGenerator.SUBUpdateTime,
+							'Profile-Update-Interval': '24',
 							'Profile-web-page-url': url.protocol + '//' + url.host + '/admin',
 							'Cache-Control': 'no-store',
 						};
@@ -649,12 +607,15 @@ export default {
 						if (!ua.includes('mozilla'))
 							responseHeaders['Content-Disposition'] =
 								`attachment; filename*=utf-8''${encodeURIComponent(config_JSON.optSubGenerator.SUBNAME)}`;
-						const protocolType =
-							(url.searchParams.has('surge') || ua.includes('surge')) &&
-							config_JSON.protocolType !== 'ss' &&
-							config_JSON.protocolType !== 'vmess'
+						const requestedProtocol = url.searchParams.get('protocol') || url.searchParams.get('proto');
+						const protocolType = requestedProtocol
+							? requestedProtocol.toLowerCase()
+							: (url.searchParams.has('surge') || ua.includes('surge')) &&
+							  config_JSON.protocolType !== 'ss' &&
+							  config_JSON.protocolType !== 'vmess' &&
+							  config_JSON.protocolType !== 'all'
 								? 'tro' + 'jan'
-								: config_JSON.protocolType;
+								: (config_JSON.protocolType || 'all');
 						let subscriptionContent = '';
 						if (subscriptionType === 'mixed') {
 							const tlsFragmentParam =
@@ -667,116 +628,95 @@ export default {
 								otherNodesLINK = '',
 								proxyIPPool = [];
 
-							if (!url.searchParams.has('sub') && config_JSON.optSubGenerator.local) {
-								// localSubscriptionGeneration
-								const fullOptimalList = config_JSON.optSubGenerator.localIPDB
-									.randomIP
-									? (
-											await generateRandomIPs(
-												request,
-												config_JSON.optSubGenerator.localIPDB.randomCount,
-												config_JSON.optSubGenerator.localIPDB.specifiedPort
-											)
-										)[0]
-									: (await env.KV.get('ADD.txt'))
-										? await parseToArray(await env.KV.get('ADD.txt'))
-										: (
-												await generateRandomIPs(
-													request,
-													config_JSON.optSubGenerator.localIPDB
-														.randomCount,
-													config_JSON.optSubGenerator.localIPDB
-														.specifiedPort
-												)
-											)[0];
-								const optimalAPI = [],
-									optimalIP = [],
-									otherNodes = [];
-								for (const element of fullOptimalList) {
-									if (element.toLowerCase().startsWith('sub://')) {
+							const addTxt = await env.KV.get('ADD.txt');
+							const fullOptimalList = addTxt
+								? await parseToArray(addTxt)
+								: (
+										await generateRandomIPs(
+											request,
+											16,
+											config_JSON.optSubGenerator?.localIPDB?.specifiedPort ?? -1
+										)
+									)[0];
+							const optimalAPI = [],
+								optimalIP = [],
+								otherNodes = [];
+							for (const element of fullOptimalList) {
+								if (element.toLowerCase().startsWith('sub://')) {
+									optimalAPI.push(element);
+								} else {
+									const remarkPosition = element.indexOf('#');
+									const addressPart =
+										remarkPosition > -1
+											? element.slice(0, remarkPosition)
+											: element;
+									const remarkPart =
+										remarkPosition > -1
+											? element.slice(remarkPosition)
+											: '';
+									const subMatch = element.match(/sub\s*=\s*([^\s&#]+)/i);
+									if (subMatch && subMatch[1].trim().includes('.')) {
+										const optimalIPAsProxyIP = element
+											.toLowerCase()
+											.includes('proxyip=true');
+										if (optimalIPAsProxyIP)
+											optimalAPI.push(
+												'sub://' +
+													subMatch[1].trim() +
+													'?proxyip=true' +
+													(element.includes('#')
+														? '#' + element.split('#')[1]
+														: '')
+											);
+										else
+											optimalAPI.push(
+												'sub://' +
+													subMatch[1].trim() +
+													(element.includes('#')
+														? '#' + element.split('#')[1]
+														: '')
+											);
+									} else if (
+										addressPart.toLowerCase().startsWith('https://')
+									) {
 										optimalAPI.push(element);
-									} else {
-										const remarkPosition = element.indexOf('#');
-										const addressPart =
-											remarkPosition > -1
-												? element.slice(0, remarkPosition)
-												: element;
-										const remarkPart =
-											remarkPosition > -1
-												? element.slice(remarkPosition)
-												: '';
-										const subMatch = element.match(/sub\s*=\s*([^\s&#]+)/i);
-										if (subMatch && subMatch[1].trim().includes('.')) {
-											const optimalIPAsProxyIP = element
-												.toLowerCase()
-												.includes('proxyip=true');
-											if (optimalIPAsProxyIP)
-												optimalAPI.push(
-													'sub://' +
-														subMatch[1].trim() +
-														'?proxyip=true' +
-														(element.includes('#')
-															? '#' + element.split('#')[1]
-															: '')
-												);
-											else
-												optimalAPI.push(
-													'sub://' +
-														subMatch[1].trim() +
-														(element.includes('#')
-															? '#' + element.split('#')[1]
-															: '')
-												);
-										} else if (
-											addressPart.toLowerCase().startsWith('https://')
-										) {
-											optimalAPI.push(element);
-										} else if (addressPart.toLowerCase().includes('://')) {
-											if (element.includes('#')) {
-												const addressRemarkSplit = element.split('#');
-												otherNodes.push(
-													addressRemarkSplit[0] +
-														'#' +
-														encodeURIComponent(
-															decodeURIComponent(
-																addressRemarkSplit[1]
-															)
+									} else if (addressPart.toLowerCase().includes('://')) {
+										if (element.includes('#')) {
+											const addressRemarkSplit = element.split('#');
+											otherNodes.push(
+												addressRemarkSplit[0] +
+													'#' +
+													encodeURIComponent(
+														decodeURIComponent(
+															addressRemarkSplit[1]
 														)
-												);
-											} else otherNodes.push(element);
-										} else {
-											if (addressPart.includes('*')) {
-												optimalIP.push(
-													replaceWildcardWithRandomChars(addressPart) +
-														remarkPart
-												);
-											} else optimalIP.push(element);
-										}
+													)
+											);
+										} else otherNodes.push(element);
+									} else {
+										if (addressPart.includes('*')) {
+											optimalIP.push(
+												replaceWildcardWithRandomChars(addressPart) +
+													remarkPart
+											);
+										} else optimalIP.push(element);
 									}
 								}
-								const fetchOptimalAPIResult = await fetchOptimalAPI(
-									optimalAPI,
-									'443'
-								);
-								const mergedOtherNodeArray = [
-									...new Set(otherNodes.concat(fetchOptimalAPIResult[1])),
-								];
-								otherNodesLINK =
-									mergedOtherNodeArray.length > 0
-										? mergedOtherNodeArray.join('\n') + '\n'
-										: '';
-								const optimalAPIIPs = fetchOptimalAPIResult[0];
-								proxyIPPool = fetchOptimalAPIResult[2] || [];
-								fullOptimalIPs = [...new Set(optimalIP.concat(optimalAPIIPs))];
-							} else {
-								// optimalSubscriptionGenerator
-								const optSubGeneratorHOST =
-									url.searchParams.get('sub') || config_JSON.optSubGenerator.SUB;
-								const [optGeneratorIPArray, optGeneratorOtherNodes] =
-									await fetchOptimalSubGeneratorData(optSubGeneratorHOST);
-								fullOptimalIPs = fullOptimalIPs.concat(optGeneratorIPArray);
-								otherNodesLINK += optGeneratorOtherNodes;
 							}
+							const fetchOptimalAPIResult = await fetchOptimalAPI(
+								optimalAPI,
+								'443'
+							);
+							const mergedOtherNodeArray = [
+								...new Set(otherNodes.concat(fetchOptimalAPIResult[1])),
+							];
+							otherNodesLINK =
+								mergedOtherNodeArray.length > 0
+									? mergedOtherNodeArray.join('\n') + '\n'
+									: '';
+							const optimalAPIIPs = fetchOptimalAPIResult[0];
+							proxyIPPool = fetchOptimalAPIResult[2] || [];
+							fullOptimalIPs = [...new Set(optimalIP.concat(optimalAPIIPs))];
 							const echLinkParam = config_JSON.ECH
 								? `&ech=${encodeURIComponent((config_JSON.ECHConfig.SNI ? config_JSON.ECHConfig.SNI + '+' : '') + config_JSON.ECHConfig.DNS)}`
 								: '';
@@ -789,7 +729,7 @@ export default {
 							subscriptionContent =
 								otherNodesLINK +
 								fullOptimalIPs
-									.map((rawAddress) => {
+									.flatMap((rawAddress) => {
 										// unified regex: match domain/IPv4/IPv6address + optional port + optionalremark
 										// example:
 										//   - domain: hj.xmm1993.top:2096#remark or example.com
@@ -808,11 +748,11 @@ export default {
 											nodePort = match[2] ? match[2] : '443'; // portDefault443，SSNoTLSmappedWhenGeneratingLink
 											nodeRemark = match[3] || nodeAddress; // remark,default toAddressItself
 										} else {
-											// invalid format，skip processing returnnull
+											// invalid format，skip processing return null
 											console.warn(
 												`[subscriptionContent] Invalid IP format ignored: ${rawAddress}`
 											);
-											return null;
+											return [];
 										}
 
 										let fullNodePath = config_JSON.fullNodePath;
@@ -832,36 +772,37 @@ export default {
 										if (isLoonOrSurge)
 											fullNodePath = fullNodePath.replace(/,/g, '%2C');
 
-										if (protocolType === 'vmess' && !asOptimalSubGenerator) {
-											// VMess link: vmess://<base64(json)>
-											const transportPathParamValue =
-												getTransportPathParamValue(
-													config_JSON,
-													fullNodePath,
-													asOptimalSubGenerator
-												);
-											// Map internal transport to VMess net field
-											let vmessNet = 'ws';
+										const transportPathParamValue =
+											getTransportPathParamValue(
+												config_JSON,
+												fullNodePath,
+												asOptimalSubGenerator
+											);
+
+										const buildVlessNode = (addr, port, remark, suffix = '') => {
+											const ps = suffix ? `${remark} - ${suffix}` : remark;
+											return `vless://00000000-0000-4000-8000-000000000000@${addr}:${port}?security=tls&type=${transportProtocol + echLinkParam}&${domainFieldName}=example.com&fp=${config_JSON.Fingerprint}&sni=example.com&${pathFieldName}=${encodeURIComponent(transportPathParamValue) + tlsFragmentParam}&encryption=none#${encodeURIComponent(ps)}`;
+										};
+
+										const buildTrojanNode = (addr, port, remark, suffix = '') => {
+											const ps = suffix ? `${remark} - ${suffix}` : remark;
+											return `trojan://00000000-0000-4000-8000-000000000000@${addr}:${port}?security=tls&type=${transportProtocol + echLinkParam}&${domainFieldName}=example.com&fp=${config_JSON.Fingerprint}&sni=example.com&${pathFieldName}=${encodeURIComponent(transportPathParamValue) + tlsFragmentParam}#${encodeURIComponent(ps)}`;
+										};
+
+										const buildVmessNode = (addr, port, remark, suffix = '') => {
+											if (asOptimalSubGenerator) return null;
+											let vmessNet = config_JSON.transportProtocol === 'grpc' ? 'grpc' : 'ws';
 											let vmessPath = transportPathParamValue;
 											let vmessHost = 'example.com';
-											if (config_JSON.transportProtocol === 'grpc') {
-												vmessNet = 'grpc';
-												vmessPath = transportPathParamValue;
-												vmessHost = 'example.com';
-											} else if (config_JSON.transportProtocol === 'xhttp') {
-												// XHTTP not standard for VMess, fallback to ws with xhttp path
-												vmessNet = 'ws';
-												vmessPath = transportPathParamValue;
-											}
-											// Determine TLS based on port
 											const tlsPorts = [443, 2053, 2083, 2087, 2096, 8443];
-											const isNodeTLS = tlsPorts.includes(Number(nodePort));
+											const isNodeTLS = tlsPorts.includes(Number(port));
 											const vmessTLS = isNodeTLS ? 'tls' : '';
 											const vmessSNI = isNodeTLS ? 'example.com' : '';
 											const vmessFP = isNodeTLS ? (config_JSON.Fingerprint || 'chrome') : '';
-											const vmessLink = generateVMessLink({
-												host: nodeAddress,
-												port: nodePort,
+											const ps = suffix ? `${remark} - ${suffix}` : remark;
+											return generateVMessLink({
+												host: addr,
+												port: port,
 												uuid: '00000000-0000-4000-8000-000000000000',
 												security: 'auto',
 												net: vmessNet,
@@ -870,15 +811,13 @@ export default {
 												tls: vmessTLS,
 												sni: vmessSNI,
 												fp: vmessFP,
-												ps: nodeRemark,
+												ps: ps,
 											});
-											// For VMess, we need to add ECH and fragment as well? VMess json doesn't support them directly,
-											// but we can append as extra params in the JSON's path if needed. For now, handle ECH via vmess link's sni.
-											return vmessLink;
-										} else if (
-											protocolType === 'ss' &&
-											!asOptimalSubGenerator
-										) {
+										};
+
+										const buildSSNode = (addr, port, remark, suffix = '') => {
+											if (asOptimalSubGenerator) return null;
+											let ssPort = port;
 											if (!config_JSON.SS.TLS) {
 												const tlsPorts = [
 													443, 2053, 2083, 2087, 2096, 8443,
@@ -886,13 +825,13 @@ export default {
 												const nonTLSPorts = [
 													80, 2052, 2082, 2086, 2095, 8080,
 												];
-												nodePort = String(
+												ssPort = String(
 													nonTLSPorts[
-														tlsPorts.indexOf(Number(nodePort))
-													] ?? nodePort
+														tlsPorts.indexOf(Number(port))
+													] ?? port
 												);
 											}
-											fullNodePath = (
+											const ssNodePath = (
 												fullNodePath.includes('?')
 													? fullNodePath.replace(
 															'?',
@@ -903,17 +842,26 @@ export default {
 													: fullNodePath +
 														'?enc=' +
 														config_JSON.SS.cipherMethod
-										).replace(/([=,])/g, '\\$1');
-										fullNodePath = fullNodePath + ';mux=0';
-										return `${protocolType}://${btoa(config_JSON.SS.cipherMethod + ':00000000-0000-4000-8000-000000000000')}@${nodeAddress}:${nodePort}?plugin=v2${encodeURIComponent('ray-plugin;mode=websocket;host=example.com;path=' + (config_JSON.randomPath ? randomPath(fullNodePath) : fullNodePath) + (config_JSON.SS.TLS ? ';tls' : '')) + echLinkParam + tlsFragmentParam}#${encodeURIComponent(nodeRemark)}`;
+											).replace(/([=,])/g, '\\$1') + ';mux=0';
+											const ps = suffix ? `${remark} - ${suffix}` : remark;
+											return `ss://${btoa(config_JSON.SS.cipherMethod + ':00000000-0000-4000-8000-000000000000')}@${addr}:${ssPort}?plugin=v2${encodeURIComponent('ray-plugin;mode=websocket;host=example.com;path=' + (config_JSON.randomPath ? randomPath(ssNodePath) : ssNodePath) + (config_JSON.SS.TLS ? ';tls' : '')) + echLinkParam + tlsFragmentParam}#${encodeURIComponent(ps)}`;
+										};
+
+										if (protocolType === 'all') {
+											return [
+												buildVlessNode(nodeAddress, nodePort, nodeRemark, 'VLESS'),
+												buildTrojanNode(nodeAddress, nodePort, nodeRemark, 'Trojan'),
+												buildVmessNode(nodeAddress, nodePort, nodeRemark, 'VMess'),
+												buildSSNode(nodeAddress, nodePort, nodeRemark, 'SS'),
+											].filter(Boolean);
+										} else if (protocolType === 'vmess') {
+											return [buildVmessNode(nodeAddress, nodePort, nodeRemark)].filter(Boolean);
+										} else if (protocolType === 'ss') {
+											return [buildSSNode(nodeAddress, nodePort, nodeRemark)].filter(Boolean);
+										} else if (protocolType === 'trojan') {
+											return [buildTrojanNode(nodeAddress, nodePort, nodeRemark)].filter(Boolean);
 										} else {
-											const transportPathParamValue =
-												getTransportPathParamValue(
-													config_JSON,
-													fullNodePath,
-													asOptimalSubGenerator
-												);
-											return `${protocolType}://00000000-0000-4000-8000-000000000000@${nodeAddress}:${nodePort}?security=tls&type=${transportProtocol + echLinkParam}&${domainFieldName}=example.com&fp=${config_JSON.Fingerprint}&sni=example.com&${pathFieldName}=${encodeURIComponent(transportPathParamValue) + tlsFragmentParam}&encryption=none#${encodeURIComponent(nodeRemark)}`;
+											return [buildVlessNode(nodeAddress, nodePort, nodeRemark)].filter(Boolean);
 										}
 									})
 									.filter((item) => item !== null)
@@ -947,7 +895,6 @@ export default {
 								});
 							// Handle VMess links where id/host/sni are inside base64 JSON
 							if (
-								protocolType === 'vmess' &&
 								subscriptionContent.includes('vmess://')
 							) {
 								// For VMess, each link's JSON contains id, host, sni, path etc. The previous replaces didn't affect base64.

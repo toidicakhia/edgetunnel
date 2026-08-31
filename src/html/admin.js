@@ -631,7 +631,6 @@ export function adminPage() {
 			<button class="tab-btn" onclick="switchTab('network', this)">🌐 Cloudflare & Network</button>
 			<button class="tab-btn" onclick="switchTab('generator', this)">⚡ Optimal Subscriptions</button>
 			<button class="tab-btn" onclick="switchTab('cloudflare', this)">☁️ Cloudflare API</button>
-			<button class="tab-btn" onclick="switchTab('logs', this)">📜 Operation Logs</button>
 		</div>
 
 		<!-- Tab 1: Node Links & Subscriptions -->
@@ -835,18 +834,6 @@ export function adminPage() {
 						<input type="text" class="form-control" id="cfg-subname" placeholder="edgetunnel">
 					</div>
 					<div class="form-group">
-						<label class="form-label">Update Interval (Hours)</label>
-						<input type="number" class="form-control" id="cfg-subUpdateTime" value="3" min="1" max="72">
-					</div>
-					<div class="form-group">
-						<label class="form-label">External Generator URL (Optional)</label>
-						<input type="text" class="form-control" id="cfg-subGeneratorUrl" placeholder="https://...">
-					</div>
-					<div class="form-group">
-						<label class="form-label">Random IP Count</label>
-						<input type="number" class="form-control" id="cfg-randomCount" value="16" min="1" max="100">
-					</div>
-					<div class="form-group">
 						<label class="form-label">Specified Port (-1 for all)</label>
 						<input type="number" class="form-control" id="cfg-specifiedPort" value="-1">
 					</div>
@@ -894,25 +881,6 @@ export function adminPage() {
 				</div>
 				<div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
 					<button class="btn btn-secondary" onclick="saveCfSettings()">Save Cloudflare Credentials</button>
-				</div>
-			</div>
-		</div>
-
-		<!-- Tab 8: Operation Logs -->
-		<div id="tab-logs" class="tab-panel">
-			<div class="card">
-				<div class="card-header">
-					<div>
-						<div class="card-title">📜 System Operation Logs</div>
-						<div class="card-desc">Audit history of recent configuration changes and admin access</div>
-					</div>
-					<div style="display: flex; gap: 0.5rem;">
-						<button class="btn btn-secondary btn-sm" onclick="loadLogs()">🔄 Refresh Logs</button>
-						<button class="btn btn-danger btn-sm" onclick="clearLogs()">🗑️ Clear Logs</button>
-					</div>
-				</div>
-				<div id="logs-container" style="background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1rem; max-height: 400px; overflow-y: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; line-height: 1.6; color: var(--text-muted);">
-					Loading logs...
 				</div>
 			</div>
 
@@ -996,7 +964,6 @@ export function adminPage() {
 				currentConfig = await res.json();
 				populateForm(currentConfig);
 				loadAddTxt();
-				loadLogs();
 				showToast('Configuration loaded successfully', 'info');
 			} catch (err) {
 				console.error(err);
@@ -1008,8 +975,7 @@ export function adminPage() {
 		function populateForm(cfg) {
 			const host = cfg.HOST || window.location.hostname;
 			document.getElementById('header-host').textContent = host;
-			document.getElementById('stat-protocol').textContent = (cfg.protocolType || 'vless').toUpperCase();
-			document.getElementById('stat-transport').textContent = (cfg.transportProtocol || 'ws').toUpperCase();
+			const proto = cfg.protocolType || 'all';
 			document.getElementById('stat-load-time').textContent = cfg.loadTime || '0ms';
 
 			if (cfg.CF?.Usage) {
@@ -1030,9 +996,8 @@ export function adminPage() {
 			document.getElementById('sub-b64').textContent = origin + '/sub?token=' + token + '&b64=1';
 
 			// Tab 2: Network
-			document.getElementById('cfg-protocolType').value = cfg.protocolType || 'vless';
+			document.getElementById('cfg-protocolType').value = cfg.protocolType || 'all';
 			document.getElementById('cfg-transportProtocol').value = cfg.transportProtocol || 'ws';
-			document.getElementById('cfg-path').value = cfg.PATH || '/';
 			document.getElementById('cfg-fingerprint').value = cfg.Fingerprint || 'chrome';
 			document.getElementById('cfg-tlsFragment').value = cfg.TLSFragment || '';
 			document.getElementById('cfg-grpcMode').value = cfg.gRPCmode || 'gun';
@@ -1049,9 +1014,6 @@ export function adminPage() {
 			// Tab 3: Optimal Sub Generator
 			const opt = cfg.optSubGenerator || {};
 			document.getElementById('cfg-subname').value = opt.SUBNAME || 'edgetunnel';
-			document.getElementById('cfg-subUpdateTime').value = opt.SUBUpdateTime || 3;
-			document.getElementById('cfg-subGeneratorUrl').value = opt.SUB || '';
-			document.getElementById('cfg-randomCount').value = opt.localIPDB?.randomCount || 16;
 			document.getElementById('cfg-specifiedPort').value = opt.localIPDB?.specifiedPort ?? -1;
 
 			// Tab 6: Cloudflare
@@ -1081,10 +1043,7 @@ export function adminPage() {
 
 				currentConfig.optSubGenerator = currentConfig.optSubGenerator || {};
 				currentConfig.optSubGenerator.SUBNAME = document.getElementById('cfg-subname').value || 'edgetunnel';
-				currentConfig.optSubGenerator.SUBUpdateTime = parseInt(document.getElementById('cfg-subUpdateTime').value, 10) || 3;
-				currentConfig.optSubGenerator.SUB = document.getElementById('cfg-subGeneratorUrl').value || null;
 				currentConfig.optSubGenerator.localIPDB = currentConfig.optSubGenerator.localIPDB || {};
-				currentConfig.optSubGenerator.localIPDB.randomCount = parseInt(document.getElementById('cfg-randomCount').value, 10) || 16;
 				currentConfig.optSubGenerator.localIPDB.specifiedPort = parseInt(document.getElementById('cfg-specifiedPort').value, 10);
 
 				const res = await fetch('/admin/config.json', {
@@ -1149,49 +1108,6 @@ export function adminPage() {
 				else showToast('Failed to save Cloudflare settings', 'error');
 			} catch (e) {
 				showToast('Error: ' + e.message, 'error');
-			}
-		}
-
-		// Load Logs
-		async function loadLogs() {
-			const container = document.getElementById('logs-container');
-			try {
-				const res = await fetch('/admin/log.json');
-				if (res.ok) {
-					const logs = await res.json();
-					if (Array.isArray(logs) && logs.length > 0) {
-						container.innerHTML = logs.map(l => {
-							const time = l.Time || l.time || '';
-							const ip = l.IP || l.ip || '';
-							const action = l.Action || l.action || '';
-							return '<div><span style="color: var(--accent);">[' + time + ']</span> ' +
-								'<span style="color: var(--success);">' + ip + '</span> - ' +
-								'<strong>' + action + '</strong></div>';
-						}).reverse().join('');
-					} else {
-						container.innerHTML = '<em>No logs recorded yet.</em>';
-					}
-				}
-			} catch (e) {
-				container.innerHTML = '<em>Failed to load logs.</em>';
-			}
-		}
-
-		// Clear Logs
-		async function clearLogs() {
-			if (!confirm('Are you sure you want to clear all operation logs?')) return;
-			try {
-				const res = await fetch('/admin/log.json', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify([])
-				});
-				if (res.ok) {
-					showToast('Logs cleared! 🗑️', 'info');
-					loadLogs();
-				}
-			} catch (e) {
-				showToast('Failed to clear logs', 'error');
 			}
 		}
 

@@ -129,3 +129,73 @@ test('singboxSubscriptionHotPatch modifies Sing-box JSON config', async () => {
 	assert.equal(parsed.dns.servers[0].server, '8.8.8.8');
 	assert.equal(parsed.dns.servers[0].type, 'https');
 });
+
+test('readConfigJSON with protocolType all generates all 4 protocol links', async () => {
+	const { readConfigJSON } = await import('../src/utils/config.js');
+	const mockEnv = {
+		KV: {
+			get: async () => null,
+			put: async () => {},
+		},
+	};
+	const uuid = 'd342d11e-d424-4583-b36e-524ab1f0afa4';
+	const cfg = await readConfigJSON(mockEnv, 'test.worker.dev', uuid, 'Mozilla/5.0', true);
+	
+	assert.equal(cfg.protocolType, 'all');
+	assert.equal(cfg.LINK.includes('vless://'), true);
+	assert.equal(cfg.LINK.includes('trojan://'), true);
+	assert.equal(cfg.LINK.includes('vmess://'), true);
+	assert.equal(cfg.LINK.includes('ss://'), true);
+});
+
+test('readConfigJSON with protocolType trojan generates trojan link', async () => {
+	const { readConfigJSON } = await import('../src/utils/config.js');
+	const mockEnv = {
+		KV: {
+			get: async () => JSON.stringify({ protocolType: 'trojan' }),
+			put: async () => {},
+		},
+	};
+	const uuid = 'd342d11e-d424-4583-b36e-524ab1f0afa4';
+	const cfg = await readConfigJSON(mockEnv, 'test.worker.dev', uuid, 'Mozilla/5.0');
+	
+	assert.equal(cfg.protocolType, 'trojan');
+	assert.equal(cfg.LINK.startsWith('trojan://'), true);
+	assert.equal(cfg.LINK.includes(uuid), true);
+});
+
+test('Router /sub generates all protocols when protocolType is all', async () => {
+	const router = (await import('../src/router.js')).default;
+	const uuid = 'd342d11e-d424-4583-b36e-524ab1f0afa4';
+	const { MD5MD5 } = await import('../src/utils/crypto.js');
+	const token = await MD5MD5('test.worker.dev' + uuid);
+
+	const mockEnv = {
+		UUID: uuid,
+		ADMIN: 'admin123',
+		KV: {
+			get: async (k) => {
+				if (k === 'config.json') return JSON.stringify({ protocolType: 'all', UUID: uuid, HOST: 'test.worker.dev', HOSTS: ['test.worker.dev'] });
+				if (k === 'ADD.txt') return '1.1.1.1:443#TestNode\n1.0.0.1:443#TestNode2';
+				return null;
+			},
+			put: async () => {},
+		},
+	};
+
+	const ctx = { waitUntil: () => {} };
+	const req = new Request(`https://test.worker.dev/sub?token=${token}`, {
+		headers: { 'User-Agent': 'Mozilla/5.0' },
+	});
+
+	const res = await router.fetch(req, mockEnv, ctx);
+	assert.equal(res.status, 200);
+	const text = await res.text();
+	
+	// Should contain links for all 4 protocols
+	assert.equal(text.includes('vless://'), true);
+	assert.equal(text.includes('trojan://'), true);
+	assert.equal(text.includes('vmess://'), true);
+	assert.equal(text.includes('ss://'), true);
+});
+
