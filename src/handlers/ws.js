@@ -817,21 +817,18 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 								const slice = chunkBytes.subarray(offset, end);
 								offset = end;
 								if (ctx.security === 'none') {
-									const lenBuf = new Uint8Array([
-										(slice.length >>> 8) & 0xff,
-										slice.length & 0xff,
-									]);
-									const slicePacket = concatByteData(lenBuf, slice);
+									// sing-vmess SecurityTypeNone + TCP (no ChunkStream option):
+									// response body is a RAW stream — no length prefix, no AEAD.
 									const packet =
 										isFirstInSend && headerBytes.length
-											? concatByteData(headerBytes, slicePacket)
-											: slicePacket;
+											? concatByteData(headerBytes, slice)
+											: slice;
 									await webSocketSendAndAwait(serverSock, packet);
 								} else {
 									// Xray server: NextPaddingLen() BEFORE Encode() — both consume SHAKE128;
 									// padding bytes are sent clear AFTER the ciphertext and included in the size
 									let padLen = 0;
-									if (ctx.respShakeParser) {
+									if (ctx.respShakeParser && (ctx.option & 0x08)) {
 										padLen = ctx.respShakeParser.nextPaddingLen();
 									}
 									const encChunk = await vmessEncryptChunk(
