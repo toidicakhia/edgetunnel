@@ -721,6 +721,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 					respHeaderSent: false,
 					respCount: 0,
 					responseSocket: null,
+					isUDP: false,
 				};
 				return vmessContext;
 			})();
@@ -731,6 +732,63 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 	const handleVMessData = async (chunk) => {
 		const ctx = await getVMessContext();
 		const data = toUint8Array(chunk);
+
+		// Decrypt VMess body chunks; 'none' security streams raw plaintext.
+		// Incomplete trailing chunks stay buffered for the next WS message.
+		const decryptVMessBody = async (rawData) => {
+			if (!rawData || !rawData.byteLength) return new Uint8Array(0);
+			ctx.buffer = concatByteData(ctx.buffer, rawData);
+			if (ctx.security === 'none') {
+				const plain = ctx.buffer;
+				ctx.buffer = new Uint8Array(0);
+				return plain;
+			}
+			let plaintext = new Uint8Array(0);
+			const hasPadding = (ctx.option & 0x08) !== 0;
+			while (ctx.buffer.length >= 2) {
+				// Xray calls NextPaddingLen() BEFORE Decode() — both consume SHAKE128
+				let padLen = 0;
+				if (hasPadding && ctx.reqShakeParser) {
+					padLen = ctx.reqShakeParser.nextPaddingLen();
+				}
+				let len;
+				if (ctx.reqShakeParser) {
+					len = ctx.reqShakeParser.decode(ctx.buffer.subarray(0, 2));
+				} else {
+					len = (ctx.buffer[0] << 8) | ctx.buffer[1];
+				}
+				if (len === 0) {
+					ctx.buffer = new Uint8Array(0);
+					break;
+				}
+				if (ctx.buffer.length < 2 + len) break;
+				// Xray includes padding in the wire size but strips it BEFORE decrypt
+				const actualLen = len - padLen;
+				if (actualLen <= 0) {
+					ctx.buffer = ctx.buffer.slice(2 + len);
+					continue;
+				}
+				const chunkData = ctx.buffer.slice(2, 2 + actualLen);
+				ctx.buffer = ctx.buffer.slice(2 + len);
+				let decrypted;
+				try {
+					decrypted = await vmessDecryptChunk(
+						chunkData,
+						ctx.bodyKey,
+						ctx.bodyIV,
+						ctx.count++,
+						ctx.security === 'auto' ? 'aes-128-gcm' : ctx.security
+					);
+				} catch (e) {
+					throw new Error('VMess chunk decrypt failed: ' + e.message);
+				}
+				if (decrypted && decrypted.byteLength) {
+					plaintext = concatByteData(plaintext, decrypted);
+				}
+			}
+			return plaintext;
+		};
+
 		// Nếu first packet chưa được xử lý
 		if (!ctx.firstPacketEstablished) {
 			ctx.buffer = concatByteData(ctx.buffer, data);
@@ -762,21 +820,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 				await enableWSLocalSpeedTestMode(serverSock, null, parsed.rawClientData);
 				return;
 			}
-			if (parsed.isUDP) {
-				if (parsed.port === 53) {
-					isDnsQuery = true;
-					trojanUDPContext.targetHost = ctx.targetHost;
-					trojanUDPContext.targetPort = ctx.targetPort;
-					if (parsed.rawClientData && parsed.rawClientData.byteLength) {
-						// VMess UDP body needs to be decrypted first
-						// For now, treat as raw and forward via UDP
-						await forwardUDP(parsed.rawClientData, serverSock, null, request);
-					}
-					return;
-				} else {
-					throw new Error('VMess UDP non-DNS not supported');
-				}
-			}
+			ctx.isUDP = parsed.isUDP;
 			// Derive response keys for AEAD
 			const bodyKeyHash = new PureSha256().update(ctx.bodyKey).digest();
 			const bodyIVHash = new PureSha256().update(ctx.bodyIV).digest();
@@ -877,56 +921,21 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			ctx.responseSocket = vmessResponseSocket;
 
 			// Decrypt all full chunks available in rawClientData
-			let firstPlaintext = new Uint8Array(0);
-			const hasPadding = (ctx.option & 0x08) !== 0;
-			if (parsed.rawClientData && parsed.rawClientData.byteLength) {
-				ctx.buffer = concatByteData(ctx.buffer, parsed.rawClientData);
-				if (ctx.security === 'none') {
-					firstPlaintext = ctx.buffer;
-					ctx.buffer = new Uint8Array(0);
-				} else {
-					while (ctx.buffer.length >= 2) {
-						// Xray calls NextPaddingLen() BEFORE Decode() — both consume SHAKE128
-						let padLen = 0;
-						if (hasPadding && ctx.reqShakeParser) {
-							padLen = ctx.reqShakeParser.nextPaddingLen();
-						}
-						let len;
-						if (ctx.reqShakeParser) {
-							len = ctx.reqShakeParser.decode(ctx.buffer.subarray(0, 2));
-						} else {
-							len = (ctx.buffer[0] << 8) | ctx.buffer[1];
-						}
-						if (len === 0) {
-							ctx.buffer = new Uint8Array(0);
-							break;
-						}
-						if (ctx.buffer.length < 2 + len) break;
-						// Xray includes padding in the wire size but strips it BEFORE decrypt
-						const actualLen = len - padLen;
-						if (actualLen <= 0) {
-							ctx.buffer = ctx.buffer.slice(2 + len);
-							continue;
-						}
-						const chunkData = ctx.buffer.slice(2, 2 + actualLen);
-						ctx.buffer = ctx.buffer.slice(2 + len);
-						let decrypted;
-						try {
-							decrypted = await vmessDecryptChunk(
-								chunkData,
-								ctx.bodyKey,
-								ctx.bodyIV,
-								ctx.count++,
-								ctx.security === 'auto' ? 'aes-128-gcm' : ctx.security
-							);
-						} catch (e) {
-							throw new Error('VMess chunk decrypt failed: ' + e.message);
-						}
-						if (decrypted && decrypted.byteLength) {
-							firstPlaintext = concatByteData(firstPlaintext, decrypted);
-						}
-					}
+			const firstPlaintext = await decryptVMessBody(parsed.rawClientData);
+
+			if (ctx.isUDP) {
+				// VMess UDP DNS: forward decrypted query via the VMess response socket
+				// so the response is AEAD-encrypted back to the client.
+				if (parsed.port !== 53) {
+					throw new Error('VMess UDP non-DNS not supported');
 				}
+				isDnsQuery = true;
+				trojanUDPContext.targetHost = ctx.targetHost;
+				trojanUDPContext.targetPort = ctx.targetPort;
+				if (firstPlaintext.byteLength) {
+					await forwardUDP(firstPlaintext, vmessResponseSocket, null, request);
+				}
+				return;
 			}
 
 			// Establish TCP connection ONCE with all decrypted initial plaintext
@@ -946,50 +955,11 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 		}
 
 		// Subsequent packets: handle VMess body chunks
-		if (ctx.security === 'none') {
-			await writeToRemote(data);
-			return;
-		}
-		const hasPadding = (ctx.option & 0x08) !== 0;
-		ctx.buffer = concatByteData(ctx.buffer, data);
-		while (ctx.buffer.length >= 2) {
-			// Xray calls NextPaddingLen() BEFORE Decode() — both consume SHAKE128
-			let padLen = 0;
-			if (hasPadding && ctx.reqShakeParser) {
-				padLen = ctx.reqShakeParser.nextPaddingLen();
-			}
-			let len;
-			if (ctx.reqShakeParser) {
-				len = ctx.reqShakeParser.decode(ctx.buffer.subarray(0, 2));
+		const decrypted = await decryptVMessBody(data);
+		if (decrypted && decrypted.byteLength) {
+			if (ctx.isUDP) {
+				await forwardUDP(decrypted, ctx.responseSocket, null, request);
 			} else {
-				len = (ctx.buffer[0] << 8) | ctx.buffer[1];
-			}
-			if (len === 0) {
-				ctx.buffer = new Uint8Array(0);
-				break;
-			}
-			if (ctx.buffer.length < 2 + len) break;
-			// Xray includes padding in the wire size but strips it BEFORE decrypt
-			const actualLen = len - padLen;
-			if (actualLen <= 0) {
-				ctx.buffer = ctx.buffer.slice(2 + len);
-				continue;
-			}
-			const chunkData = ctx.buffer.slice(2, 2 + actualLen);
-			ctx.buffer = ctx.buffer.slice(2 + len);
-			let decrypted;
-			try {
-				decrypted = await vmessDecryptChunk(
-					chunkData,
-					ctx.bodyKey,
-					ctx.bodyIV,
-					ctx.count++,
-					ctx.security === 'auto' ? 'aes-128-gcm' : ctx.security
-				);
-			} catch (e) {
-				throw new Error('VMess chunk decrypt failed: ' + e.message);
-			}
-			if (decrypted && decrypted.byteLength) {
 				await writeToRemote(decrypted);
 			}
 		}
@@ -1000,6 +970,10 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 		if (isDnsQuery) {
 			if (isTrojan)
 				return await forwardTrojanUDPData(chunk, serverSock, trojanUDPContext, request);
+			if (determineProtocolType === 'vmess') {
+				await handleVMessData(chunk);
+				return;
+			}
 			return await forwardUDP(chunk, serverSock, null, request);
 		}
 		if (determineProtocolType === 'ss') {

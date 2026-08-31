@@ -512,7 +512,6 @@ export async function forwardTCP(
 		}
 	}
 }
-
 export async function forwardUDP(udpChunk, webSocket, respHeader, request, responseWrapper = null) {
 	const requestData = toUint8Array(udpChunk);
 	const requestByteCount = requestData.byteLength;
@@ -522,17 +521,39 @@ export async function forwardUDP(udpChunk, webSocket, respHeader, request, respo
 		const tcpSocket = tcpConnector({ hostname: '8.8.4.4', port: 53 });
 		let vlessHeader = respHeader;
 		const writer = tcpSocket.writable.getWriter();
-		await writer.write(requestData);
-		log(`[UDPforward] DNS requestwasWrittenupstream: ${requestByteCount}B`);
+		// DNS-over-TCP requires a 2-byte length prefix (RFC 1035 §4.2.2). The
+		// trojan path (responseWrapper set) already frames the query caller-side;
+		// every other transport sends a raw DNS payload, so frame it here.
+		const alreadyFramed =
+			requestData.byteLength >= 2 &&
+			((requestData[0] << 8) | requestData[1]) === requestData.byteLength - 2;
+		const framedRequest = alreadyFramed
+			? requestData
+			: (() => {
+					const framed = new Uint8Array(requestData.byteLength + 2);
+					framed[0] = (requestData.byteLength >>> 8) & 0xff;
+					framed[1] = requestData.byteLength & 0xff;
+					framed.set(requestData, 2);
+					return framed;
+			  })();
+		await writer.write(framedRequest);
+		log(`[UDPforward] DNS requestwasWrittenupstream: ${framedRequest.byteLength}B`);
 		writer.releaseLock();
 		await tcpSocket.readable.pipeTo(
 			new WritableStream({
 				async write(chunk) {
 					const rawResponse = toUint8Array(chunk);
 					log(`[UDP Forward] Received DNS response: ${rawResponse.byteLength}B`);
+					// Each read chunk is one DNS-over-TCP frame (2-byte length +
+					// payload). Strip the length prefix for transports that expect
+					// a raw DNS payload; the trojan wrapper parses the frame itself.
+					const responsePayload =
+						responseWrapper || rawResponse.byteLength < 2
+							? rawResponse
+							: rawResponse.subarray(2);
 					const wrapResult = responseWrapper
 						? await responseWrapper(rawResponse)
-						: rawResponse;
+						: responsePayload;
 					const sendFragmentList = Array.isArray(wrapResult) ? wrapResult : [wrapResult];
 					if (!sendFragmentList.length) return;
 					if (webSocket.readyState !== WebSocket.OPEN) return;
