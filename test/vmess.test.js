@@ -121,7 +121,7 @@ test('vmessCreateResponseHeader creates valid decryptable response header', asyn
 	const respHeaderByte = 0x55;
 
 	const resp = await vmessCreateResponseHeader(respHeaderByte, bodyKey, bodyIV);
-	assert.equal(resp.length, 18 + 18); // 18 bytes enc len + 18 bytes enc payload (2 + 16)
+	assert.equal(resp.length, 18 + 20); // 18 bytes enc len + 20 bytes enc payload (4-byte plain + 16 tag)
 
 	// Decrypt with client keys
 	const bodyKeyHash = new Uint8Array(await crypto.subtle.digest('SHA-256', bodyKey));
@@ -137,7 +137,7 @@ test('vmessCreateResponseHeader creates valid decryptable response header', asyn
 	const lenK = await crypto.subtle.importKey('raw', lenKey, { name: 'AES-GCM' }, false, ['decrypt']);
 	const lenPt = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: lenNonce }, lenK, resp.slice(0, 18)));
 	const payloadLen = (lenPt[0] << 8) | lenPt[1];
-	assert.equal(payloadLen, 2);
+	assert.equal(payloadLen, 4);
 
 	const payloadK = await crypto.subtle.importKey('raw', payloadKey, { name: 'AES-GCM' }, false, ['decrypt']);
 	const payloadPt = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: payloadNonce }, payloadK, resp.slice(18)));

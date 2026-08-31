@@ -828,6 +828,12 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 											: slicePacket;
 									await webSocketSendAndAwait(serverSock, packet);
 								} else {
+									// Xray server: NextPaddingLen() BEFORE Encode() — both consume SHAKE128;
+									// padding bytes are sent clear AFTER the ciphertext and included in the size
+									let padLen = 0;
+									if (ctx.respShakeParser) {
+										padLen = ctx.respShakeParser.nextPaddingLen();
+									}
 									const encChunk = await vmessEncryptChunk(
 										slice,
 										ctx.respBodyKey,
@@ -835,16 +841,23 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 										ctx.respCount++,
 										ctx.security === 'auto' ? 'aes-128-gcm' : ctx.security
 									);
+									let lenToEncode = encChunk.length + padLen;
 									let lenBuf;
 									if (ctx.respShakeParser) {
-										lenBuf = ctx.respShakeParser.encode(encChunk.length);
+										lenBuf = ctx.respShakeParser.encode(lenToEncode);
 									} else {
 										lenBuf = new Uint8Array([
-											(encChunk.length >>> 8) & 0xff,
-											encChunk.length & 0xff,
+											(lenToEncode >>> 8) & 0xff,
+											lenToEncode & 0xff,
 										]);
 									}
-									const bodyPacket = concatByteData(lenBuf, encChunk);
+									let bodyPacket = concatByteData(lenBuf, encChunk);
+									if (padLen > 0) {
+										bodyPacket = concatByteData(
+											bodyPacket,
+											crypto.getRandomValues(new Uint8Array(padLen))
+										);
+									}
 									const packet =
 										isFirstInSend && headerBytes.length
 											? concatByteData(headerBytes, bodyPacket)
@@ -876,6 +889,11 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 					ctx.buffer = new Uint8Array(0);
 				} else {
 					while (ctx.buffer.length >= 2) {
+						// Xray calls NextPaddingLen() BEFORE Decode() — both consume SHAKE128
+						let padLen = 0;
+						if (hasPadding && ctx.reqShakeParser) {
+							padLen = ctx.reqShakeParser.nextPaddingLen();
+						}
 						let len;
 						if (ctx.reqShakeParser) {
 							len = ctx.reqShakeParser.decode(ctx.buffer.subarray(0, 2));
@@ -887,7 +905,13 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 							break;
 						}
 						if (ctx.buffer.length < 2 + len) break;
-						const chunkData = ctx.buffer.slice(2, 2 + len);
+						// Xray includes padding in the wire size but strips it BEFORE decrypt
+						const actualLen = len - padLen;
+						if (actualLen <= 0) {
+							ctx.buffer = ctx.buffer.slice(2 + len);
+							continue;
+						}
+						const chunkData = ctx.buffer.slice(2, 2 + actualLen);
 						ctx.buffer = ctx.buffer.slice(2 + len);
 						let decrypted;
 						try {
@@ -900,12 +924,6 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 							);
 						} catch (e) {
 							throw new Error('VMess chunk decrypt failed: ' + e.message);
-						}
-						if (hasPadding && ctx.reqShakeParser) {
-							const padLen = ctx.reqShakeParser.nextPaddingLen();
-							if (decrypted.length >= padLen) {
-								decrypted = decrypted.subarray(0, decrypted.length - padLen);
-							}
 						}
 						if (decrypted && decrypted.byteLength) {
 							firstPlaintext = concatByteData(firstPlaintext, decrypted);
@@ -938,6 +956,11 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 		const hasPadding = (ctx.option & 0x08) !== 0;
 		ctx.buffer = concatByteData(ctx.buffer, data);
 		while (ctx.buffer.length >= 2) {
+			// Xray calls NextPaddingLen() BEFORE Decode() — both consume SHAKE128
+			let padLen = 0;
+			if (hasPadding && ctx.reqShakeParser) {
+				padLen = ctx.reqShakeParser.nextPaddingLen();
+			}
 			let len;
 			if (ctx.reqShakeParser) {
 				len = ctx.reqShakeParser.decode(ctx.buffer.subarray(0, 2));
@@ -949,7 +972,13 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 				break;
 			}
 			if (ctx.buffer.length < 2 + len) break;
-			const chunkData = ctx.buffer.slice(2, 2 + len);
+			// Xray includes padding in the wire size but strips it BEFORE decrypt
+			const actualLen = len - padLen;
+			if (actualLen <= 0) {
+				ctx.buffer = ctx.buffer.slice(2 + len);
+				continue;
+			}
+			const chunkData = ctx.buffer.slice(2, 2 + actualLen);
 			ctx.buffer = ctx.buffer.slice(2 + len);
 			let decrypted;
 			try {
@@ -962,12 +991,6 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 				);
 			} catch (e) {
 				throw new Error('VMess chunk decrypt failed: ' + e.message);
-			}
-			if (hasPadding && ctx.reqShakeParser) {
-				const padLen = ctx.reqShakeParser.nextPaddingLen();
-				if (decrypted.length >= padLen) {
-					decrypted = decrypted.subarray(0, decrypted.length - padLen);
-				}
 			}
 			if (decrypted && decrypted.byteLength) {
 				await writeToRemote(decrypted);

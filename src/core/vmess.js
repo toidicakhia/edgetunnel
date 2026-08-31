@@ -1017,6 +1017,11 @@ export async function* vmessBodyReader(buffer, bodyKey, bodyIV, security, option
 	const shakeParser = (hasMask || hasPadding) ? new ShakeSizeParser(bodyIV) : null;
 
 	while (offset + 2 <= buffer.length) {
+		// Xray calls NextPaddingLen() BEFORE Decode() — both consume SHAKE128
+		let padLen = 0;
+		if (hasPadding && shakeParser) {
+			padLen = shakeParser.nextPaddingLen();
+		}
 		let len;
 		if (shakeParser) {
 			len = shakeParser.decode(buffer.subarray(offset, offset + 2));
@@ -1037,11 +1042,8 @@ export async function* vmessBodyReader(buffer, bodyKey, bodyIV, security, option
 		}
 		count++;
 
-		if (hasPadding && shakeParser) {
-			const padLen = shakeParser.nextPaddingLen();
-			if (decrypted.length >= padLen) {
-				decrypted = decrypted.subarray(0, decrypted.length - padLen);
-			}
+		if (padLen && decrypted.length >= padLen) {
+			decrypted = decrypted.subarray(0, decrypted.length - padLen);
 		}
 
 		yield decrypted;
@@ -1060,9 +1062,9 @@ export async function vmessCreateResponseHeader(responseHeaderByte, bodyKey, bod
 	const payloadKey = vmessKDF16(respKey, KDFSaltConstAEADRespHeaderPayloadKey);
 	const payloadNonce = vmessKDF(respIV, KDFSaltConstAEADRespHeaderPayloadIV).slice(0, 12);
 
-	// Xray-core server.go EncodeResponseHeader: [responseHeader, Option=0x00]
-	// responseHeaderByte là byte client gửi trong inner header, server phải echo lại đúng
-	const plainHeader = new Uint8Array([responseHeaderByte, 0x00]);
+	// Xray-core server.go EncodeResponseHeader writes [responseHeader, Option]
+	// then MarshalCommand(nil) fails and appends [0x00, 0x00]; the client reads 4 bytes.
+	const plainHeader = new Uint8Array([responseHeaderByte, 0x00, 0x00, 0x00]);
 	const lenPlain = new Uint8Array([(plainHeader.length >>> 8) & 0xff, plainHeader.length & 0xff]);
 	const lenCt = await aesGcmEncrypt(lenKey, lenNonce, lenPlain, new Uint8Array(0));
 	const payloadCt = await aesGcmEncrypt(payloadKey, payloadNonce, plainHeader, new Uint8Array(0));

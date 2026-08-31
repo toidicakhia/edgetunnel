@@ -792,6 +792,34 @@ export function adminPage() {
 					</div>
 				</div>
 			</div>
+
+			<div class="card">
+				<div class="card-header">
+					<div>
+						<div class="card-title">🔒 Shadowsocks (SS) Settings</div>
+						<div class="card-desc">Configure Shadowsocks AEAD cipher and TLS transport for SS protocol</div>
+					</div>
+				</div>
+				<div class="form-grid">
+					<div class="form-group">
+						<label class="form-label">AEAD Cipher Method</label>
+						<select id="cfg-ssCipher">
+							<option value="aes-128-gcm">aes-128-gcm</option>
+							<option value="aes-256-gcm">aes-256-gcm</option>
+						</select>
+					</div>
+					<div class="toggle-group">
+						<div class="toggle-info">
+							<div class="toggle-title">Use TLS for SS</div>
+							<div class="toggle-desc">Send SS over TLS (wss://) instead of plain ws://</div>
+						</div>
+						<label class="switch">
+							<input type="checkbox" id="cfg-ssTls">
+							<span class="slider"></span>
+						</label>
+					</div>
+				</div>
+			</div>
 		</div>
 
 		<!-- Tab 3: Optimal Subscriptions -->
@@ -1124,6 +1152,11 @@ export function adminPage() {
 			document.getElementById('cfg-randomPath').checked = !!cfg.randomPath;
 			document.getElementById('cfg-ech').checked = !!cfg.ECH;
 
+			// Shadowsocks (SS) settings
+			const ssCfg = cfg.SS || {};
+			document.getElementById('cfg-ssCipher').value = ssCfg.cipherMethod || 'aes-128-gcm';
+			document.getElementById('cfg-ssTls').checked = !!ssCfg.TLS;
+
 			// Tab 3: Optimal Sub Generator
 			const opt = cfg.optSubGenerator || {};
 			document.getElementById('cfg-subname').value = opt.SUBNAME || 'edgetunnel';
@@ -1167,6 +1200,10 @@ export function adminPage() {
 				currentConfig.enable0RTT = document.getElementById('cfg-enable0RTT').checked;
 				currentConfig.randomPath = document.getElementById('cfg-randomPath').checked;
 				currentConfig.ECH = document.getElementById('cfg-ech').checked;
+				currentConfig.SS = {
+					cipherMethod: document.getElementById('cfg-ssCipher').value,
+					TLS: document.getElementById('cfg-ssTls').checked
+				};
 
 				currentConfig.optSubGenerator = currentConfig.optSubGenerator || {};
 				currentConfig.optSubGenerator.SUBNAME = document.getElementById('cfg-subname').value || 'edgetunnel';
