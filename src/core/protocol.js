@@ -95,14 +95,20 @@ export async function forwardTrojanUDPProxyData(chunk, webSocket, context, reque
 	}
 }
 
+const _trojanHashCache = new Map();
+
 export function getTrojanPasswordHashes(passwordPlainText) {
 	const text = String(passwordPlainText || '');
+	let cached = _trojanHashCache.get(text);
+	if (cached) return cached;
 	const hash1 = sha224(text).toLowerCase();
 	const hash2 = sha224(hash1).toLowerCase();
 	const hashes = [hash1, hash2];
 	if (/^[0-9a-fA-F]{56}$/.test(text)) {
 		hashes.push(text.toLowerCase());
 	}
+	if (_trojanHashCache.size > 128) _trojanHashCache.clear();
+	_trojanHashCache.set(text, hashes);
 	return hashes;
 }
 

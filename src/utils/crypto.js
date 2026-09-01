@@ -4,10 +4,12 @@
  * Original: edgetunnel 2.1 (2026-08-11)
  */
 
+const _textEncoder = new TextEncoder();
+const _textDecoder = new TextDecoder();
+
 export function base64SecretEncode(plaintext, secret) {
-	const encoder = new TextEncoder();
-	const data = encoder.encode(plaintext);
-	const key = encoder.encode(secret);
+	const data = _textEncoder.encode(plaintext);
+	const key = _textEncoder.encode(secret);
 	const mixed = new Uint8Array(data.length);
 
 	for (let i = 0; i < data.length; i++) {
@@ -36,16 +38,14 @@ export function base64SecretDecode(encoded, secret) {
 		mixed[i] = binary.charCodeAt(i);
 	}
 
-	const encoder = new TextEncoder();
-	const key = encoder.encode(secret);
+	const key = _textEncoder.encode(secret);
 	const data = new Uint8Array(mixed.length);
 
 	for (let i = 0; i < mixed.length; i++) {
 		data[i] = mixed[i] ^ key[i % key.length];
 	}
 
-	const decoder = new TextDecoder();
-	return decoder.decode(data);
+	return _textDecoder.decode(data);
 }
 
 export function pureMD5(string) {
@@ -133,13 +133,13 @@ export function pureMD5(string) {
 	if (string instanceof Uint8Array) {
 		bytes = string;
 	} else if (typeof string === 'string') {
-		bytes = new TextEncoder().encode(string);
+		bytes = _textEncoder.encode(string);
 	} else if (string instanceof ArrayBuffer) {
 		bytes = new Uint8Array(string);
 	} else if (ArrayBuffer.isView(string)) {
 		bytes = new Uint8Array(string.buffer, string.byteOffset, string.byteLength);
 	} else {
-		bytes = new TextEncoder().encode(String(string || ''));
+		bytes = _textEncoder.encode(String(string || ''));
 	}
 
 	const x = convertBytesToWordArray(bytes);
@@ -249,21 +249,20 @@ export function pureMD5Bytes(stringOrBytes) {
 	const hex = pureMD5(stringOrBytes);
 	const bytes = new Uint8Array(16);
 	for (let i = 0; i < 16; i++) {
-		bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+		bytes[i] = (parseInt(hex[i * 2], 16) << 4) | parseInt(hex[i * 2 + 1], 16);
 	}
 	return bytes;
 }
 
 export async function MD5MD5(text) {
-	const encoder = new TextEncoder();
 	try {
-		const firstHash = await crypto.subtle.digest('MD5', encoder.encode(text));
+		const firstHash = await crypto.subtle.digest('MD5', _textEncoder.encode(text));
 		const firstHashArray = Array.from(new Uint8Array(firstHash));
 		const firstHex = firstHashArray
 			.map((bytes) => bytes.toString(16).padStart(2, '0'))
 			.join('');
 
-		const secondHash = await crypto.subtle.digest('MD5', encoder.encode(firstHex.slice(7, 27)));
+		const secondHash = await crypto.subtle.digest('MD5', _textEncoder.encode(firstHex.slice(7, 27)));
 		const secondHashArray = Array.from(new Uint8Array(secondHash));
 		const secondHex = secondHashArray
 			.map((bytes) => bytes.toString(16).padStart(2, '0'))

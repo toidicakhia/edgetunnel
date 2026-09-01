@@ -17,6 +17,16 @@ import {
 	setTCPConcurrentDialCount,
 } from './state.js';
 import { MD5MD5 } from './utils/crypto.js';
+
+let _cachedMD5MD5 = null;
+let _cachedMD5MD5Key = '';
+
+async function cachedMD5MD5(text) {
+	if (text === _cachedMD5MD5Key && _cachedMD5MD5) return _cachedMD5MD5;
+	_cachedMD5MD5 = await MD5MD5(text);
+	_cachedMD5MD5Key = text;
+	return _cachedMD5MD5;
+}
 import {
 	clashSubscriptionHotPatch,
 	getCloudflareUsage,
@@ -71,7 +81,7 @@ export default {
 			env.UUID ||
 			env.uuid;
 		const encryptionSecret = env.KEY || 'Do not modify this default secret key';
-		const userIDMD5 = await MD5MD5(adminPassword + encryptionSecret);
+		const userIDMD5 = await cachedMD5MD5(adminPassword + encryptionSecret);
 		const uuidRegex =
 			/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
 		const envUUID = env.UUID || env.uuid;

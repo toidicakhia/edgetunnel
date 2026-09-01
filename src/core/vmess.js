@@ -176,14 +176,16 @@ class HMac {
 	}
 }
 
+const _vmessKDFSaltBytes = new TextEncoder().encode(KDFSaltConstVMessAEADKDF);
+const _cmdKeySaltBytes = new TextEncoder().encode(CMD_KEY_SALT);
+
 /**
  * KDF as per Xray-core proxy/vmess/aead/kdf.go
  * Recursively creates nested HMAC structures.
  */
 export function vmessKDF(keyBytes, ...paths) {
-	const KDFSaltConst = new TextEncoder().encode(KDFSaltConstVMessAEADKDF);
 	let creator = function () {
-		return new HMac(() => new PureSha256(), KDFSaltConst);
+		return new HMac(() => new PureSha256(), _vmessKDFSaltBytes);
 	};
 	for (const p of paths) {
 		const pBytes = p instanceof Uint8Array ? p : new TextEncoder().encode(String(p));
@@ -206,10 +208,9 @@ export function getCmdKey(uuidStr) {
 	// CmdKey = MD5(UUID bytes + 'c48619fe-8f02-49e0-b9e9-edf763e17e21')
 	const uuidBytes = getUUIDBytes(uuidStr);
 	if (!uuidBytes) throw new Error('Invalid UUID for CmdKey');
-	const salt = new TextEncoder().encode(CMD_KEY_SALT);
-	const combined = new Uint8Array(uuidBytes.length + salt.length);
+	const combined = new Uint8Array(uuidBytes.length + _cmdKeySaltBytes.length);
 	combined.set(uuidBytes, 0);
-	combined.set(salt, uuidBytes.length);
+	combined.set(_cmdKeySaltBytes, uuidBytes.length);
 	return pureMD5Bytes(combined);
 }
 
@@ -248,10 +249,20 @@ export function fnv1a(data) {
 // -----------------------------------------------------------------------------
 // AES Helpers (WebCrypto AES-GCM + Pure JS AES-128 ECB)
 // -----------------------------------------------------------------------------
+const _aesKeyCache = new Map();
+
+async function _importAesKey(keyBytes, usage) {
+	const cacheKey = `${keyBytes.length}:${Array.from(keyBytes).join(',')}:${usage}`;
+	let entry = _aesKeyCache.get(cacheKey);
+	if (entry) return entry;
+	entry = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, [usage]);
+	if (_aesKeyCache.size > 256) _aesKeyCache.clear();
+	_aesKeyCache.set(cacheKey, entry);
+	return entry;
+}
+
 async function aesGcmEncrypt(keyBytes, nonce12, plaintext, ad) {
-	const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, [
-		'encrypt',
-	]);
+	const key = await _importAesKey(keyBytes, 'encrypt');
 	const algo = {
 		name: 'AES-GCM',
 		iv: nonce12,
@@ -263,9 +274,7 @@ async function aesGcmEncrypt(keyBytes, nonce12, plaintext, ad) {
 }
 
 async function aesGcmDecrypt(keyBytes, nonce12, ciphertext, ad) {
-	const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, [
-		'decrypt',
-	]);
+	const key = await _importAesKey(keyBytes, 'decrypt');
 	const algo = {
 		name: 'AES-GCM',
 		iv: nonce12,
