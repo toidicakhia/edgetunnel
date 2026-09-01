@@ -193,7 +193,7 @@ export async function getProxyParams(url, uuid, defaultProxyIP = '', defaultProx
 	return proxyContext;
 }
 
-export const proxyProtocolDefaultPorts = {
+const proxyProtocolDefaultPorts = {
 	socks5: 1080,
 	http: 80,
 	https: 443,
@@ -201,14 +201,14 @@ export const proxyProtocolDefaultPorts = {
 	sstp: 443,
 };
 
-export function getProxyDefaultPort(type) {
+function getProxyDefaultPort(type) {
 	return proxyProtocolDefaultPorts[String(type || '').toLowerCase()] || 80;
 }
 
-export const SOCKS5accountBase64regex = /^(?:[A-Z0-9+/]{4})*(?:[A-Z0-9+/]{2}==|[A-Z0-9+/]{3}=)?$/i,
+const SOCKS5accountBase64regex = /^(?:[A-Z0-9+/]{4})*(?:[A-Z0-9+/]{2}==|[A-Z0-9+/]{3}=)?$/i,
 	IPv6bracketRegex = /^\[.*\]$/;
 
-export function getSOCKS5Account(address, defaultPort = 80) {
+function getSOCKS5Account(address, defaultPort = 80) {
 	address = String(address || '')
 		.trim()
 		.replace(/^(socks5|http|https|turn|sstp):\/\//i, '')

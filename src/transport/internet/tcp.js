@@ -48,58 +48,6 @@ export async function dialTCP(connector, dest, { timeoutMs = 9999, allowHalfOpen
 }
 
 /**
- * Race multiple dials (TCP_CONCURRENT_DIAL behavior): first-opened wins,
- * losers closed.
- * @param {Array<() => Promise<Socket>>} dialers
- * @returns {Promise<Socket>}
- */
-export async function raceDial(dialers) {
-	if (dialers.length === 1) return dialers[0]();
-	let settled = false;
-	const losers = [];
-	return await new Promise((resolve, reject) => {
-		for (const dial of dialers) {
-			dial()
-				.then((socket) => {
-					if (settled) {
-						losers.push(socket);
-						return;
-					}
-					settled = true;
-					resolve(socket);
-					for (const l of losers) {
-						try {
-							l.close();
-						} catch {
-							/* ignore */
-						}
-					}
-				})
-				.catch((err) => {
-					if (!settled) {
-						settled = true;
-						reject(err);
-					}
-				});
-		}
-	});
-}
-
-/** Parse 'host:port' / '[v6]:port' into { hostname, port }. */
-export function parseHostPort(str, defaultPort = 443) {
-	const s = String(str).trim();
-	if (s.startsWith('[')) {
-		const end = s.indexOf(']');
-		return { hostname: s.slice(1, end), port: Number(s.slice(end + 2) || defaultPort) };
-	}
-	const i = s.lastIndexOf(':');
-	if (i > 0 && !s.includes(':', i + 1)) {
-		return { hostname: s.slice(0, i), port: Number(s.slice(i + 1) || defaultPort) };
-	}
-	return { hostname: s, port: defaultPort };
-}
-
-/**
  * Bidirectional byte relay between a socket and a transport Link.
  * Resolves when the socket closes; rejects on pump errors; closes the socket
  * when the link ends.

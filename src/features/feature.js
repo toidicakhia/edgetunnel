@@ -22,7 +22,3 @@ export class Feature {
 	}
 }
 
-/** Convenience: wrap a plain object of callbacks into a Feature. */
-export function featureFrom(typeKey, impl) {
-	return Object.assign(new Feature(), { type: () => typeKey }, impl);
-}

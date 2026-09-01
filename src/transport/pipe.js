@@ -100,28 +100,3 @@ export function pipe({ highWaterMark = 4 * 1024 * 1024, discardOverflow = false 
 	return { readable, writable, interrupt, closed };
 }
 
-/** Read all remaining bytes of a stream as Uint8Array (bounded). */
-export async function readAll(stream, { limit = 1024 * 1024 } = {}) {
-	const reader = stream.getReader();
-	const chunks = [];
-	let total = 0;
-	try {
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			total += value.byteLength;
-			if (total > limit) throw new Error(`readAll: exceeded limit ${limit}`);
-			chunks.push(value);
-		}
-	} finally {
-		reader.releaseLock();
-	}
-	if (chunks.length === 1) return chunks[0];
-	const out = new Uint8Array(total);
-	let off = 0;
-	for (const c of chunks) {
-		out.set(c, off);
-		off += c.byteLength;
-	}
-	return out;
-}

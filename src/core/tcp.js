@@ -503,13 +503,6 @@ export function closeSocketQuietly(socket) {
 	} catch {}
 }
 
-export function formatIdentifier(arr, offset = 0) {
-	const hex = [...arr.slice(offset, offset + 16)]
-		.map((b) => b.toString(16).padStart(2, '0'))
-		.join('');
-	return `${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}`;
-}
-
 export async function webSocketSendAndAwait(webSocket, payload) {
 
 	const sendResult = webSocket.send(payload);

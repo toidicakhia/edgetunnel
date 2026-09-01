@@ -10,33 +10,13 @@
 
 import { Done } from './signal.js';
 
-/** SniffingRequest — mirrors session.SniffingRequest. */
-export class SniffingRequest {
-	constructor({
-		enabled = false,
-		metadataOnly = false,
-		routeOnly = false,
-		overrideDestinationForProtocol = [],
-		excludeForDomain = [],
-		excludeForIP = [],
-	} = {}) {
-		this.enabled = enabled;
-		this.metadataOnly = metadataOnly;
-		this.routeOnly = routeOnly;
-		this.overrideDestinationForProtocol = overrideDestinationForProtocol;
-		this.excludeForDomain = excludeForDomain;
-		this.excludeForIP = excludeForIP;
-	}
-
-	clone() {
-		return new SniffingRequest({
-			enabled: this.enabled,
-			metadataOnly: this.metadataOnly,
-			routeOnly: this.routeOnly,
-			overrideDestinationForProtocol: [...this.overrideDestinationForProtocol],
-			excludeForDomain: [...this.excludeForDomain],
-			excludeForIP: [...this.excludeForIP],
-		});
+/** session.Content — mirrors session.Content. */
+class Content {
+	constructor({ protocol = '', sniffingRequest = null, attributes = null, skipDNSResolve = false } = {}) {
+		this.protocol = protocol;
+		this.sniffingRequest = sniffingRequest;
+		this.attributes = attributes || new Map();
+		this.skipDNSResolve = skipDNSResolve;
 	}
 }
 
@@ -52,27 +32,6 @@ export class Inbound {
 		this.vlessRoute = vlessRoute;
 		this.conn = null;
 		this.timer = null;
-	}
-}
-
-/** session.Outbound — mirrors session.Outbound. */
-export class Outbound {
-	constructor({ originalTarget = null, target = null, routeTarget = null, tag = '', name = '' } = {}) {
-		this.originalTarget = originalTarget;
-		this.target = target;
-		this.routeTarget = routeTarget;
-		this.tag = tag;
-		this.name = name;
-	}
-}
-
-/** session.Content — mirrors session.Content. */
-export class Content {
-	constructor({ protocol = '', sniffingRequest = null, attributes = null, skipDNSResolve = false } = {}) {
-		this.protocol = protocol;
-		this.sniffingRequest = sniffingRequest;
-		this.attributes = attributes || new Map();
-		this.skipDNSResolve = skipDNSResolve;
 	}
 }
 
@@ -136,16 +95,3 @@ export function newSession() {
 	return new SessionContext();
 }
 
-/**
- * Attach extra arbitrary data (attributes) without polluting the class.
- */
-export function withAttribute(ctx, key, value) {
-	ctx.content.attributes.set(key, value);
-	return ctx;
-}
-
-export function attribute(ctx, key) {
-	return ctx.content.attributes.get(key);
-}
-
-export const SessionKey = Symbol('session');

@@ -348,7 +348,7 @@ export function createUplinkWriteQueue({
 	};
 }
 
-export function createDownlinkGrainSender(webSocket, headerData = null, isActive = null) {
+function createDownlinkGrainSender(webSocket, headerData = null, isActive = null) {
 	const packetCap = downlinkGrainPacketBytes;
 	const tailBytes = downlinkGrainTailThreshold;
 	const grain = createGrainBundler(packetCap, true);

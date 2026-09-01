@@ -8,8 +8,6 @@
  *   - rule list from config: { type, value, tag, inboundTag? }
  */
 
-import { Router, newRoute } from '../../features/routing.js';
-
 /** Escape regex specials for literal matching. */
 function escapeRegex(s) {
 	return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -74,85 +72,3 @@ export function cidrMatcher(cidr) {
 	};
 }
 
-/**
- * RouterImpl — ordered rule list; first match wins; optional default tag.
- */
-export class RouterImpl extends Router {
-	/**
-	 * @param {Array<{type: string, value: string, tag: string, ruleTag?: string}>} rules
-	 * @param {{ defaultTag?: string }} opts
-	 */
-	constructor(rules = [], { defaultTag = '' } = {}) {
-		super();
-		this.rules = rules.map((r) => ({ ...r, matcher: compileRule(r) }));
-		this.defaultTag = defaultTag;
-	}
-
-	async start() {}
-	async close() {}
-
-	pickRoute(ctx) {
-		const target = ctx.target;
-		if (!target) {
-			const err = new Error('no target in session');
-			err.code = 'ErrNoClue';
-			throw err;
-		}
-		for (const rule of this.rules) {
-			if (matchRule(rule, target, ctx)) {
-				return newRoute(rule.tag, { ruleTag: rule.ruleTag || rule.type });
-			}
-		}
-		if (this.defaultTag) return newRoute(this.defaultTag);
-		const err = new Error('no matching route');
-		err.code = 'ErrNoClue';
-		throw err;
-	}
-}
-
-function compileRule(rule) {
-	switch (rule.type) {
-		case 'domain-suffix':
-		case 'domain-exact':
-			return patternMatcher(rule.value);
-		case 'ip':
-			return cidrMatcher(rule.value);
-		case 'port':
-		case 'port-range': {
-			const [a, b] = String(rule.value).split('-').map(Number);
-			if (b !== undefined) return (dest) => dest.port >= a && dest.port <= b;
-			return (dest) => dest.port === a;
-		}
-		case 'network': {
-			const net = String(rule.value).toLowerCase();
-			return (dest) => (net === 'tcp' ? dest.network === 0x01 : net === 'udp' ? dest.network === 0x02 : false);
-		}
-		default:
-			return () => false;
-	}
-}
-
-function matchRule(rule, dest, ctx) {
-	if (rule.inboundTag && ctx.inbound?.tag !== rule.inboundTag) return false;
-	return rule.matcher(dest.address, dest, ctx);
-}
-
-/** Build router rules from the socks5 whitelist (GO2SOCKS5 semantics). */
-export function rulesFromWhitelist(whitelist, { tag = 'socks5' } = {}) {
-	const rules = [];
-	let catchAll = false;
-	for (const entry of whitelist || []) {
-		const p = String(entry || '').trim();
-		if (!p) continue;
-		if (p === '*') {
-			catchAll = true;
-			continue;
-		}
-		rules.push({
-			type: p.startsWith('*') ? 'domain-suffix' : 'domain-exact',
-			value: p.replace(/^\*/, ''),
-			tag,
-		});
-	}
-	return { rules, defaultTag: catchAll ? tag : '' };
-}

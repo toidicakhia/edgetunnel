@@ -47,23 +47,3 @@ export function handleHTTPUpgradeRequest(request, config = {}) {
 	return { ok: true, response };
 }
 
-/**
- * Build the duplex over an upgraded HTTP request.
- * Note: Workers do not expose raw TCP upgrade sockets; edgetunnel bridges
- * this transport over the request body + response stream (same wire effect).
- * @param {ReadableStream<Uint8Array>} requestBody
- * @param {WritableStream<Uint8Array>} responseWriter — the response body writable
- */
-export function httpUpgradeDuplex(requestBody, responseWriter) {
-	return {
-		readable: requestBody,
-		writable: responseWriter,
-		close() {
-			try {
-				responseWriter.close();
-			} catch {
-				/* ignore */
-			}
-		},
-	};
-}
