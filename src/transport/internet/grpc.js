@@ -88,4 +88,3 @@ function writeVarint(bytes, offset, value) {
 	bytes[off++] = n;
 	return off - offset;
 }
-

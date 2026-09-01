@@ -66,7 +66,11 @@ export function pipe({ highWaterMark = 4 * 1024 * 1024, discardOverflow = false 
 					buffered -= queue.shift().size;
 				}
 			}
-			while (buffered + data.byteLength > highWaterMark && !readableEnded && !interruptDone.done()) {
+			while (
+				buffered + data.byteLength > highWaterMark &&
+				!readableEnded &&
+				!interruptDone.done()
+			) {
 				await new Promise((resolve) => waiters.push(resolve));
 			}
 			if (interruptDone.done() || readableEnded) throw new Error('pipe: reader closed');
@@ -92,11 +96,9 @@ export function pipe({ highWaterMark = 4 * 1024 * 1024, discardOverflow = false 
 	};
 
 	// settle closed when both sides end
-	Promise.allSettled([
-		readable.closed.catch(() => {}),
-		writable.closed.catch(() => {}),
-	]).then(() => resolveClosed());
+	Promise.allSettled([readable.closed.catch(() => {}), writable.closed.catch(() => {})]).then(
+		() => resolveClosed()
+	);
 
 	return { readable, writable, interrupt, closed };
 }
-

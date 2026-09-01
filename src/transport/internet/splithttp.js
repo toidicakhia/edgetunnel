@@ -194,7 +194,11 @@ export function extractPaddingFromRequest(request, config) {
 				return '';
 			}
 		}
-		return request.headers.get('x_padding') || new URL(request.url).searchParams.get('x_padding') || '';
+		return (
+			request.headers.get('x_padding') ||
+			new URL(request.url).searchParams.get('x_padding') ||
+			''
+		);
 	}
 	const key = config.xPaddingKey;
 	const header = config.xPaddingHeader;
@@ -476,7 +480,11 @@ export async function handleSplitHTTPRequest(request, config, sessionManager) {
 	// 5. request padding validation
 	const paddingValue = extractPaddingFromRequest(request, config);
 	if (!isPaddingValid(paddingValue, padRange.from, padRange.to, config.xPaddingMethod)) {
-		return { ok: false, status: 400, response: new Response('Bad Request', { status: 400, headers }) };
+		return {
+			ok: false,
+			status: 400,
+			response: new Response('Bad Request', { status: 400, headers }),
+		};
 	}
 	const obfsPaddingAccepted = config.xPaddingObfsMode && paddingValue !== '';
 
@@ -484,8 +492,18 @@ export async function handleSplitHTTPRequest(request, config, sessionManager) {
 	const { sessionId, seqStr } = extractMetaFromRequest(request, config);
 
 	// 7. mode enforcement
-	if (!sessionId && config.mode && config.mode !== 'auto' && config.mode !== 'stream-one' && config.mode !== 'stream-up') {
-		return { ok: false, status: 400, response: new Response('Bad Request', { status: 400, headers }) };
+	if (
+		!sessionId &&
+		config.mode &&
+		config.mode !== 'auto' &&
+		config.mode !== 'stream-one' &&
+		config.mode !== 'stream-up'
+	) {
+		return {
+			ok: false,
+			status: 400,
+			response: new Response('Bad Request', { status: 400, headers }),
+		};
 	}
 
 	const currentSession = sessionId ? sessionManager.upsert(sessionId) : null;
@@ -495,14 +513,22 @@ export async function handleSplitHTTPRequest(request, config, sessionManager) {
 		if (!seqStr) {
 			// stream-up
 			if (config.mode && config.mode !== 'auto' && config.mode !== 'stream-up') {
-				return { ok: false, status: 400, response: new Response('Bad Request', { status: 400, headers }) };
+				return {
+					ok: false,
+					status: 400,
+					response: new Response('Bad Request', { status: 400, headers }),
+				};
 			}
 			headers.set('Cache-Control', 'no-store');
 			const body = request.body;
 			try {
 				currentSession.queue.push({ reader: body });
 			} catch {
-				return { ok: false, status: 409, response: new Response('Conflict', { status: 409, headers }) };
+				return {
+					ok: false,
+					status: 409,
+					response: new Response('Conflict', { status: 409, headers }),
+				};
 			}
 			const hasLegacyReferer = request.headers.get('referer') !== '';
 			if ((hasLegacyReferer || obfsPaddingAccepted) && config.scStreamUpServerSecs?.to > 0) {
@@ -510,36 +536,63 @@ export async function handleSplitHTTPRequest(request, config, sessionManager) {
 				return {
 					ok: true,
 					status: 200,
-					response: new Response(streamUpPaddingBody(config, onClose), { status: 200, headers }),
+					response: new Response(streamUpPaddingBody(config, onClose), {
+						status: 200,
+						headers,
+					}),
 				};
 			}
-			return { ok: true, status: 200, response: new Response(null, { status: 200, headers }) };
+			return {
+				ok: true,
+				status: 200,
+				response: new Response(null, { status: 200, headers }),
+			};
 		}
 		// packet-up
 		if (config.mode && config.mode !== 'auto' && config.mode !== 'packet-up') {
-			return { ok: false, status: 400, response: new Response('Bad Request', { status: 400, headers }) };
+			return {
+				ok: false,
+				status: 400,
+				response: new Response('Bad Request', { status: 400, headers }),
+			};
 		}
 		const placement = config.getNormalizedUplinkDataPlacement();
 		const bodyBytes = await readRequestBodyBounded(request, config.scMaxEachPostBytes);
 		if (bodyBytes === null) {
 			headers.set('Cache-Control', 'no-store');
-			return { ok: false, status: 413, response: new Response('Payload Too Large', { status: 413, headers }) };
+			return {
+				ok: false,
+				status: 413,
+				response: new Response('Payload Too Large', { status: 413, headers }),
+			};
 		}
 		request._bodyBytes = bodyBytes;
 		const payload = extractPacketPayload(request, config, placement);
 		if (payload === null) {
-			return { ok: false, status: 400, response: new Response('Bad Request', { status: 400, headers }) };
+			return {
+				ok: false,
+				status: 400,
+				response: new Response('Bad Request', { status: 400, headers }),
+			};
 		}
 		let seq;
 		try {
 			seq = BigInt(seqStr);
 		} catch {
-			return { ok: false, status: 500, response: new Response('Internal Server Error', { status: 500, headers }) };
+			return {
+				ok: false,
+				status: 500,
+				response: new Response('Internal Server Error', { status: 500, headers }),
+			};
 		}
 		try {
 			currentSession.queue.push({ seq, payload });
 		} catch {
-			return { ok: false, status: 500, response: new Response('Internal Server Error', { status: 500, headers }) };
+			return {
+				ok: false,
+				status: 500,
+				response: new Response('Internal Server Error', { status: 500, headers }),
+			};
 		}
 		if (payload.byteLength === 0) {
 			headers.set('Cache-Control', 'no-store');
@@ -557,11 +610,18 @@ export async function handleSplitHTTPRequest(request, config, sessionManager) {
 
 		// Downlink body: session queue iterator (sessioned) or request body (stream-one)
 		const onClose = currentSession ? () => sessionManager.remove(sessionId) : null;
-		const body = splitHTTPResponseStream(currentSession ? currentSession.queue : request.body, onClose);
+		const body = splitHTTPResponseStream(
+			currentSession ? currentSession.queue : request.body,
+			onClose
+		);
 		return { ok: true, status: 200, response: new Response(body, { status: 200, headers }) };
 	}
 
-	return { ok: false, status: 405, response: new Response('Method Not Allowed', { status: 405, headers }) };
+	return {
+		ok: false,
+		status: 405,
+		response: new Response('Method Not Allowed', { status: 405, headers }),
+	};
 }
 
 /** Read request body bounded to maxBytes+1; null when oversized. */

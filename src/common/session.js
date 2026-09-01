@@ -12,7 +12,12 @@ import { Done } from './signal.js';
 
 /** session.Content — mirrors session.Content. */
 class Content {
-	constructor({ protocol = '', sniffingRequest = null, attributes = null, skipDNSResolve = false } = {}) {
+	constructor({
+		protocol = '',
+		sniffingRequest = null,
+		attributes = null,
+		skipDNSResolve = false,
+	} = {}) {
 		this.protocol = protocol;
 		this.sniffingRequest = sniffingRequest;
 		this.attributes = attributes || new Map();
@@ -22,7 +27,15 @@ class Content {
 
 /** session.Inbound — mirrors session.Inbound. */
 export class Inbound {
-	constructor({ source = null, local = null, gateway = null, tag = '', name = '', user = null, vlessRoute = null } = {}) {
+	constructor({
+		source = null,
+		local = null,
+		gateway = null,
+		tag = '',
+		name = '',
+		user = null,
+		vlessRoute = null,
+	} = {}) {
 		this.source = source; // Destination (remote addr)
 		this.local = local; // Destination (local addr)
 		this.gateway = gateway;
@@ -94,4 +107,3 @@ export class SessionContext {
 export function newSession() {
 	return new SessionContext();
 }
-

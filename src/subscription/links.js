@@ -81,14 +81,11 @@ export function generateShadowsocksLink({
 	return `ss://${b64UserInfo}@${host}:${port}${tag}`;
 }
 
-export function generateSocks5Link({
-	host,
-	port = 1080,
-	username = '',
-	password = '',
-	name = '',
-}) {
-	const auth = username && password ? `${encodeURIComponent(username)}:${encodeURIComponent(password)}@` : '';
+export function generateSocks5Link({ host, port = 1080, username = '', password = '', name = '' }) {
+	const auth =
+		username && password
+			? `${encodeURIComponent(username)}:${encodeURIComponent(password)}@`
+			: '';
 	const tag = name ? `#${encodeURIComponent(name)}` : '';
 	return `socks5://${auth}${host}:${port}${tag}`;
 }

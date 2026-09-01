@@ -36,7 +36,7 @@ export function cidrMatcher(cidr) {
 		let mask = 0;
 		for (let i = 0; i < 4; i++) {
 			const shift = 8 - Math.max(0, Math.min(8, bits - i * 8));
-			mask = (mask << 8) | (shift > 0 ? 0xff << shift : 0xff) & 0xff;
+			mask = (mask << 8) | ((shift > 0 ? 0xff << shift : 0xff) & 0xff);
 		}
 		const base = octets.reduce((acc, o) => (acc << 8) | o, 0) >>> 0;
 		return (hostname) => {
@@ -71,4 +71,3 @@ export function cidrMatcher(cidr) {
 		return true;
 	};
 }
-

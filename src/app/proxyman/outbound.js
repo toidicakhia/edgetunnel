@@ -47,7 +47,11 @@ export class OutboundManager extends Manager {
 	}
 
 	getDefaultHandler() {
-		return (this.defaultTag && this.handlers.get(this.defaultTag)) || this.handlers.values().next().value || null;
+		return (
+			(this.defaultTag && this.handlers.get(this.defaultTag)) ||
+			this.handlers.values().next().value ||
+			null
+		);
 	}
 
 	setDefaultHandler(tag) {

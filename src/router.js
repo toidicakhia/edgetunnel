@@ -35,12 +35,7 @@ import {
 	readConfigJSON,
 	singboxSubscriptionHotPatch,
 } from './utils/config.js';
-import {
-	log,
-	parseToArray,
-	randomPath,
-	replaceWildcardWithRandomChars,
-} from './utils/helpers.js';
+import { log, parseToArray, randomPath, replaceWildcardWithRandomChars } from './utils/helpers.js';
 import { getProxyParams } from './core/proxy.js';
 import { fetchOptimalAPI, generateRandomIPs } from './utils/doh.js';
 import { getXHTTPPaddingIdentifiers, handleXHTTPRequest } from './handlers/xhttp.js';
@@ -593,39 +588,38 @@ export default {
 								`upload=${pagesSum}; download=${workersSum}; total=${total}; expire=4102329600`; // 2099-12-31ExpiryTime
 						}
 						const subscriptionType = url.searchParams.has('target')
-								? url.searchParams.get('target')
-								: url.searchParams.has('clash') ||
-									  ua.includes('clash') ||
-									  ua.includes('meta') ||
-									  ua.includes('mihomo')
-									? 'clash'
-									: url.searchParams.has('sb') ||
-										  url.searchParams.has('singbox') ||
-										  ua.includes('singbox') ||
-										  ua.includes('sing-box')
-										? 'singbox'
-										: url.searchParams.has('surge') || ua.includes('surge')
-											? 'surge&ver=4'
-											: url.searchParams.has('quanx') ||
-												  ua.includes('quantumult')
-												? 'quanx'
-												: url.searchParams.has('loon') ||
-													  ua.includes('loon')
-													? 'loon'
-													: 'mixed';
+							? url.searchParams.get('target')
+							: url.searchParams.has('clash') ||
+								  ua.includes('clash') ||
+								  ua.includes('meta') ||
+								  ua.includes('mihomo')
+								? 'clash'
+								: url.searchParams.has('sb') ||
+									  url.searchParams.has('singbox') ||
+									  ua.includes('singbox') ||
+									  ua.includes('sing-box')
+									? 'singbox'
+									: url.searchParams.has('surge') || ua.includes('surge')
+										? 'surge&ver=4'
+										: url.searchParams.has('quanx') || ua.includes('quantumult')
+											? 'quanx'
+											: url.searchParams.has('loon') || ua.includes('loon')
+												? 'loon'
+												: 'mixed';
 
 						if (!ua.includes('mozilla'))
 							responseHeaders['Content-Disposition'] =
 								`attachment; filename*=utf-8''${encodeURIComponent(config_JSON.optSubGenerator.SUBNAME)}`;
-						const requestedProtocol = url.searchParams.get('protocol') || url.searchParams.get('proto');
+						const requestedProtocol =
+							url.searchParams.get('protocol') || url.searchParams.get('proto');
 						const protocolType = requestedProtocol
 							? requestedProtocol.toLowerCase()
 							: (url.searchParams.has('surge') || ua.includes('surge')) &&
-							  config_JSON.protocolType !== 'ss' &&
-							  config_JSON.protocolType !== 'vmess' &&
-							  config_JSON.protocolType !== 'all'
+								  config_JSON.protocolType !== 'ss' &&
+								  config_JSON.protocolType !== 'vmess' &&
+								  config_JSON.protocolType !== 'all'
 								? 'tro' + 'jan'
-								: (config_JSON.protocolType || 'all');
+								: config_JSON.protocolType || 'all';
 						let subscriptionContent = '';
 						if (subscriptionType === 'mixed') {
 							const tlsFragmentParam =
@@ -645,7 +639,8 @@ export default {
 										await generateRandomIPs(
 											request,
 											16,
-											config_JSON.optSubGenerator?.localIPDB?.specifiedPort ?? -1
+											config_JSON.optSubGenerator?.localIPDB?.specifiedPort ??
+												-1
 										)
 									)[0];
 							const optimalAPI = [],
@@ -661,9 +656,7 @@ export default {
 											? element.slice(0, remarkPosition)
 											: element;
 									const remarkPart =
-										remarkPosition > -1
-											? element.slice(remarkPosition)
-											: '';
+										remarkPosition > -1 ? element.slice(remarkPosition) : '';
 									const subMatch = element.match(/sub\s*=\s*([^\s&#]+)/i);
 									if (subMatch && subMatch[1].trim().includes('.')) {
 										const optimalIPAsProxyIP = element
@@ -686,9 +679,7 @@ export default {
 														? '#' + element.split('#')[1]
 														: '')
 											);
-									} else if (
-										addressPart.toLowerCase().startsWith('https://')
-									) {
+									} else if (addressPart.toLowerCase().startsWith('https://')) {
 										optimalAPI.push(element);
 									} else if (addressPart.toLowerCase().includes('://')) {
 										if (element.includes('#')) {
@@ -697,9 +688,7 @@ export default {
 												addressRemarkSplit[0] +
 													'#' +
 													encodeURIComponent(
-														decodeURIComponent(
-															addressRemarkSplit[1]
-														)
+														decodeURIComponent(addressRemarkSplit[1])
 													)
 											);
 										} else otherNodes.push(element);
@@ -713,10 +702,7 @@ export default {
 									}
 								}
 							}
-							const fetchOptimalAPIResult = await fetchOptimalAPI(
-								optimalAPI,
-								'443'
-							);
+							const fetchOptimalAPIResult = await fetchOptimalAPI(optimalAPI, '443');
 							const mergedOtherNodeArray = [
 								...new Set(otherNodes.concat(fetchOptimalAPIResult[1])),
 							];
@@ -782,33 +768,52 @@ export default {
 										if (isLoonOrSurge)
 											fullNodePath = fullNodePath.replace(/,/g, '%2C');
 
-										const transportPathParamValue =
-											getTransportPathParamValue(
-												config_JSON,
-												fullNodePath,
-												asOptimalSubGenerator
-											);
+										const transportPathParamValue = getTransportPathParamValue(
+											config_JSON,
+											fullNodePath,
+											asOptimalSubGenerator
+										);
 
-										const buildVlessNode = (addr, port, remark, suffix = '') => {
+										const buildVlessNode = (
+											addr,
+											port,
+											remark,
+											suffix = ''
+										) => {
 											const ps = suffix ? `${remark} - ${suffix}` : remark;
 											return `vless://00000000-0000-4000-8000-000000000000@${addr}:${port}?security=tls&type=${transportProtocol + echLinkParam}&${domainFieldName}=example.com&fp=${config_JSON.Fingerprint}&sni=example.com&${pathFieldName}=${encodeURIComponent(transportPathParamValue) + tlsFragmentParam}&encryption=none#${encodeURIComponent(ps)}`;
 										};
 
-										const buildTrojanNode = (addr, port, remark, suffix = '') => {
+										const buildTrojanNode = (
+											addr,
+											port,
+											remark,
+											suffix = ''
+										) => {
 											const ps = suffix ? `${remark} - ${suffix}` : remark;
 											return `trojan://00000000-0000-4000-8000-000000000000@${addr}:${port}?security=tls&type=${transportProtocol + echLinkParam}&${domainFieldName}=example.com&fp=${config_JSON.Fingerprint}&sni=example.com&${pathFieldName}=${encodeURIComponent(transportPathParamValue) + tlsFragmentParam}#${encodeURIComponent(ps)}`;
 										};
 
-										const buildVmessNode = (addr, port, remark, suffix = '') => {
+										const buildVmessNode = (
+											addr,
+											port,
+											remark,
+											suffix = ''
+										) => {
 											if (asOptimalSubGenerator) return null;
-											let vmessNet = config_JSON.transportProtocol === 'grpc' ? 'grpc' : 'ws';
+											let vmessNet =
+												config_JSON.transportProtocol === 'grpc'
+													? 'grpc'
+													: 'ws';
 											let vmessPath = transportPathParamValue;
 											let vmessHost = 'example.com';
 											const tlsPorts = [443, 2053, 2083, 2087, 2096, 8443];
 											const isNodeTLS = tlsPorts.includes(Number(port));
 											const vmessTLS = isNodeTLS ? 'tls' : '';
 											const vmessSNI = isNodeTLS ? 'example.com' : '';
-											const vmessFP = isNodeTLS ? (config_JSON.Fingerprint || 'chrome') : '';
+											const vmessFP = isNodeTLS
+												? config_JSON.Fingerprint || 'chrome'
+												: '';
 											const ps = suffix ? `${remark} - ${suffix}` : remark;
 											return generateVMessLink({
 												host: addr,
@@ -836,13 +841,12 @@ export default {
 													80, 2052, 2082, 2086, 2095, 8080,
 												];
 												ssPort = String(
-													nonTLSPorts[
-														tlsPorts.indexOf(Number(port))
-													] ?? port
+													nonTLSPorts[tlsPorts.indexOf(Number(port))] ??
+														port
 												);
 											}
-											const ssNodePath = (
-												fullNodePath.includes('?')
+											const ssNodePath =
+												(fullNodePath.includes('?')
 													? fullNodePath.replace(
 															'?',
 															'?enc=' +
@@ -852,26 +856,54 @@ export default {
 													: fullNodePath +
 														'?enc=' +
 														config_JSON.SS.cipherMethod
-											).replace(/([=,])/g, '\\$1') + ';mux=0';
+												).replace(/([=,])/g, '\\$1') + ';mux=0';
 											const ps = suffix ? `${remark} - ${suffix}` : remark;
 											return `ss://${btoa(config_JSON.SS.cipherMethod + ':00000000-0000-4000-8000-000000000000')}@${addr}:${ssPort}?plugin=v2${encodeURIComponent('ray-plugin;mode=websocket;host=example.com;path=' + (config_JSON.randomPath ? randomPath(ssNodePath) : ssNodePath) + (config_JSON.SS.TLS ? ';tls' : '')) + echLinkParam + tlsFragmentParam}#${encodeURIComponent(ps)}`;
 										};
 
 										if (protocolType === 'all') {
 											return [
-												buildVlessNode(nodeAddress, nodePort, nodeRemark, 'VLESS'),
-												buildTrojanNode(nodeAddress, nodePort, nodeRemark, 'Trojan'),
-												buildVmessNode(nodeAddress, nodePort, nodeRemark, 'VMess'),
-												buildSSNode(nodeAddress, nodePort, nodeRemark, 'SS'),
+												buildVlessNode(
+													nodeAddress,
+													nodePort,
+													nodeRemark,
+													'VLESS'
+												),
+												buildTrojanNode(
+													nodeAddress,
+													nodePort,
+													nodeRemark,
+													'Trojan'
+												),
+												buildVmessNode(
+													nodeAddress,
+													nodePort,
+													nodeRemark,
+													'VMess'
+												),
+												buildSSNode(
+													nodeAddress,
+													nodePort,
+													nodeRemark,
+													'SS'
+												),
 											].filter(Boolean);
 										} else if (protocolType === 'vmess') {
-											return [buildVmessNode(nodeAddress, nodePort, nodeRemark)].filter(Boolean);
+											return [
+												buildVmessNode(nodeAddress, nodePort, nodeRemark),
+											].filter(Boolean);
 										} else if (protocolType === 'ss') {
-											return [buildSSNode(nodeAddress, nodePort, nodeRemark)].filter(Boolean);
+											return [
+												buildSSNode(nodeAddress, nodePort, nodeRemark),
+											].filter(Boolean);
 										} else if (protocolType === 'trojan') {
-											return [buildTrojanNode(nodeAddress, nodePort, nodeRemark)].filter(Boolean);
+											return [
+												buildTrojanNode(nodeAddress, nodePort, nodeRemark),
+											].filter(Boolean);
 										} else {
-											return [buildVlessNode(nodeAddress, nodePort, nodeRemark)].filter(Boolean);
+											return [
+												buildVlessNode(nodeAddress, nodePort, nodeRemark),
+											].filter(Boolean);
 										}
 									})
 									.filter((item) => item !== null)
@@ -904,9 +936,7 @@ export default {
 									return currentRandomHost;
 								});
 							// Handle VMess links where id/host/sni are inside base64 JSON
-							if (
-								subscriptionContent.includes('vmess://')
-							) {
+							if (subscriptionContent.includes('vmess://')) {
 								// For VMess, each link's JSON contains id, host, sni, path etc. The previous replaces didn't affect base64.
 								// We need to decode each vmess:// line, replace, and re-encode.
 								// Use a separate counter for VMess hosts to keep rotation consistent with VLESS

@@ -15,7 +15,6 @@ import {
 import { closeSocketQuietly, webSocketSendAndAwait } from './tcp.js';
 import { getValidDataLength, log, toUint8Array } from '../utils/helpers.js';
 
-
 export function createGrainBundler(capacity, copyBundleResult = false) {
 	let queue = [];
 	let head = 0;
@@ -395,7 +394,6 @@ export function createDownlinkGrainSender(webSocket, headerData = null, isActive
 	};
 
 	const sendRawChunk = async (chunk) => {
-
 		if (!isCurrentSenderActive()) return;
 		if (webSocket.readyState !== WebSocket.OPEN) throw new Error('ws.readyState is not open');
 		chunk = prependResponseHeader(chunk);
@@ -550,7 +548,6 @@ export function createDownlinkGrainSender(webSocket, headerData = null, isActive
 		},
 		flush,
 		async stopAndFlush() {
-
 			if (stopStarted) {
 				await waitForActiveSendComplete();
 				while (directSendPromise) await directSendPromise;

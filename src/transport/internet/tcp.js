@@ -31,7 +31,10 @@ export async function dialTCP(connector, dest, { timeoutMs = 9999, allowHalfOpen
 		await Promise.race([
 			socket.opened,
 			new Promise((_, reject) => {
-				timer = setTimeout(() => reject(new Error(`tcp: connect timeout ${dest.hostname}:${dest.port}`)), timeoutMs);
+				timer = setTimeout(
+					() => reject(new Error(`tcp: connect timeout ${dest.hostname}:${dest.port}`)),
+					timeoutMs
+				);
 			}),
 		]);
 	} catch (err) {

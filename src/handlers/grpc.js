@@ -10,7 +10,6 @@ import { forwardTrojanUDPData, parseTrojanRequest, parseVLESSRequest } from '../
 import { getValidDataLength, log, toUint8Array } from '../utils/helpers.js';
 import { parseVMessRequest, vmessCreateResponseHeader } from '../core/vmess.js';
 
-
 export async function handleGRPCRequest(request, yourUUID, proxyContext = {}) {
 	if (!request.body) return new Response('Bad Request', { status: 400 });
 	const reader = request.body.getReader();

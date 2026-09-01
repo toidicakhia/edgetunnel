@@ -64,7 +64,11 @@ export function webSocketDuplex(ws, { initial = null, maxMessageBytes = 64 * 102
 				} else if (event.data instanceof ArrayBuffer) {
 					data = new Uint8Array(event.data);
 				} else if (ArrayBuffer.isView(event.data)) {
-					data = new Uint8Array(event.data.buffer, event.data.byteOffset, event.data.byteLength);
+					data = new Uint8Array(
+						event.data.buffer,
+						event.data.byteOffset,
+						event.data.byteLength
+					);
 				} else {
 					return;
 				}
@@ -75,7 +79,9 @@ export function webSocketDuplex(ws, { initial = null, maxMessageBytes = 64 * 102
 				controller.enqueue(data);
 			});
 			ws.addEventListener('close', () => controller.close());
-			ws.addEventListener('error', (e) => controller.error(e?.error || new Error('websocket error')));
+			ws.addEventListener('error', (e) =>
+				controller.error(e?.error || new Error('websocket error'))
+			);
 		},
 		pull() {
 			if (!initialDone && initialBuffer.length) {

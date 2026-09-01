@@ -64,4 +64,3 @@ export function sniffTLSClientHello(bytes) {
 	}
 	return null;
 }
-

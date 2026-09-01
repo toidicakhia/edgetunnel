@@ -15,7 +15,12 @@ const REQUEST_LIMIT = 64 * 1024;
 
 function findHTTPRequestHeaderEnd(data) {
 	for (let i = 0; i <= data.byteLength - 4; i++) {
-		if (data[i] === 0x0d && data[i + 1] === 0x0a && data[i + 2] === 0x0d && data[i + 3] === 0x0a)
+		if (
+			data[i] === 0x0d &&
+			data[i + 1] === 0x0a &&
+			data[i + 2] === 0x0d &&
+			data[i + 3] === 0x0a
+		)
 			return i + 4;
 	}
 	return -1;

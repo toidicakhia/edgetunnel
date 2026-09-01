@@ -906,10 +906,7 @@ export class TlsClient {
 								(serverKeyExchange = parseServerKeyExchange(message.body)));
 							break;
 						case HANDSHAKE_TYPE_SERVER_HELLO_DONE:
-							return (
-								this.recordHandshake(message.raw),
-								1
-							);
+							return (this.recordHandshake(message.raw), 1);
 						case HANDSHAKE_TYPE_CERTIFICATE_REQUEST:
 							throw new Error('Client certificate is not supported');
 						default:

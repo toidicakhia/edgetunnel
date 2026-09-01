@@ -31,18 +31,20 @@ const CMD_KEY_SALT = 'c48619fe-8f02-49e0-b9e9-edf763e17e21';
 export class PureSha256 {
 	constructor() {
 		this.K = new Uint32Array([
-			0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-			0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-			0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-			0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-			0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-			0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-			0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-			0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+			0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
+			0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
+			0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
+			0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+			0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
+			0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+			0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
+			0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+			0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
+			0xc67178f2,
 		]);
 		this.h = new Uint32Array([
-			0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-			0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+			0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
+			0x5be0cd19,
 		]);
 		this.buf = new Uint8Array(64);
 		this.bufLen = 0;
@@ -68,7 +70,8 @@ export class PureSha256 {
 			const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
 			const ch = (e & f) ^ (~e & g);
 			const t1 = (h0 + S1 + ch + K[i] + W[i]) >>> 0;
-			const S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+			const S0 =
+				((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
 			const maj = (a & b0) ^ (a & c) ^ (b0 & c);
 			const t2 = (S0 + maj) >>> 0;
 			h0 = g;
@@ -91,7 +94,12 @@ export class PureSha256 {
 	}
 
 	update(data) {
-		const bytes = data instanceof Uint8Array ? data : (typeof data === 'string' ? new TextEncoder().encode(data) : new Uint8Array(data));
+		const bytes =
+			data instanceof Uint8Array
+				? data
+				: typeof data === 'string'
+					? new TextEncoder().encode(data)
+					: new Uint8Array(data);
 		this.totalLen += bytes.length;
 		let offset = 0;
 		while (offset < bytes.length) {
@@ -195,7 +203,8 @@ export function vmessKDF(keyBytes, ...paths) {
 		};
 	}
 	const hmac = creator();
-	const kBytes = keyBytes instanceof Uint8Array ? keyBytes : new TextEncoder().encode(String(keyBytes));
+	const kBytes =
+		keyBytes instanceof Uint8Array ? keyBytes : new TextEncoder().encode(String(keyBytes));
 	hmac.update(kBytes);
 	return hmac.digest();
 }
@@ -488,12 +497,30 @@ function aesEcbDecryptPureJS(key16, ciphertext16) {
 // SHAKE-128 / Keccak Sponge Implementation for Chunk Masking & Padding
 // -----------------------------------------------------------------------------
 const KECCAK_RC = [
-	0x0000000000000001n, 0x0000000000008082n, 0x800000000000808an, 0x8000000080008000n,
-	0x000000000000808bn, 0x0000000080000001n, 0x8000000080008081n, 0x8000000000008009n,
-	0x000000000000008an, 0x0000000000000088n, 0x0000000080008009n, 0x000000008000000an,
-	0x000000008000808bn, 0x800000000000008bn, 0x8000000000008089n, 0x8000000000008003n,
-	0x8000000000008002n, 0x8000000000000080n, 0x000000000000800an, 0x800000008000000an,
-	0x8000000080008081n, 0x8000000000008080n, 0x0000000080000001n, 0x8000000080008008n,
+	0x0000000000000001n,
+	0x0000000000008082n,
+	0x800000000000808an,
+	0x8000000080008000n,
+	0x000000000000808bn,
+	0x0000000080000001n,
+	0x8000000080008081n,
+	0x8000000000008009n,
+	0x000000000000008an,
+	0x0000000000000088n,
+	0x0000000080008009n,
+	0x000000008000000an,
+	0x000000008000808bn,
+	0x800000000000008bn,
+	0x8000000000008089n,
+	0x8000000000008003n,
+	0x8000000000008002n,
+	0x8000000000000080n,
+	0x000000000000800an,
+	0x800000008000000an,
+	0x8000000080008081n,
+	0x8000000000008080n,
+	0x0000000080000001n,
+	0x8000000080008008n,
 ];
 
 const KECCAK_RHO = [
@@ -548,7 +575,7 @@ export class Shake128 {
 			for (let y = 0; y < 5; y++) {
 				const y5 = y * 5;
 				for (let x = 0; x < 5; x++) {
-					s[y5 + x] = B[y5 + x] ^ ((~B[y5 + ((x + 1) % 5)]) & B[y5 + ((x + 2) % 5)]);
+					s[y5 + x] = B[y5 + x] ^ (~B[y5 + ((x + 1) % 5)] & B[y5 + ((x + 2) % 5)]);
 				}
 			}
 			s[0] ^= KECCAK_RC[round];
@@ -594,13 +621,16 @@ export class Shake128 {
 				const B = new BigUint64Array(25);
 				const s = this.state;
 				for (let round = 0; round < 24; round++) {
-					for (let x = 0; x < 5; x++) C[x] = s[x] ^ s[x + 5] ^ s[x + 10] ^ s[x + 15] ^ s[x + 20];
+					for (let x = 0; x < 5; x++)
+						C[x] = s[x] ^ s[x + 5] ^ s[x + 10] ^ s[x + 15] ^ s[x + 20];
 					for (let x = 0; x < 5; x++) D[x] = C[(x + 4) % 5] ^ rotl64(C[(x + 1) % 5], 1);
 					for (let i = 0; i < 25; i++) s[i] ^= D[i % 5];
 					for (let i = 0; i < 25; i++) B[KECCAK_PI[i]] = rotl64(s[i], KECCAK_RHO[i]);
 					for (let y = 0; y < 5; y++) {
 						const y5 = y * 5;
-						for (let x = 0; x < 5; x++) s[y5 + x] = B[y5 + x] ^ ((~B[y5 + ((x + 1) % 5)]) & B[y5 + ((x + 2) % 5)]);
+						for (let x = 0; x < 5; x++)
+							s[y5 + x] =
+								B[y5 + x] ^ (~B[y5 + ((x + 1) % 5)] & B[y5 + ((x + 2) % 5)]);
 					}
 					s[0] ^= KECCAK_RC[round];
 				}
@@ -715,12 +745,7 @@ export async function openVMessAEADHeader(cmdKey, authID, readerOrBytes) {
 	const nonce = data.slice(18, 26);
 	const rest = data.slice(26);
 
-	const lenKey = vmessKDF16(
-		cmdKey,
-		KDFSaltConstVMessHeaderPayloadLengthAEADKey,
-		authID,
-		nonce
-	);
+	const lenKey = vmessKDF16(cmdKey, KDFSaltConstVMessHeaderPayloadLengthAEADKey, authID, nonce);
 	const lenNonce = vmessKDF(
 		cmdKey,
 		KDFSaltConstVMessHeaderPayloadLengthAEADIV,
@@ -739,18 +764,11 @@ export async function openVMessAEADHeader(cmdKey, authID, readerOrBytes) {
 	if (rest.length < headerLen + 16) return null;
 
 	const encryptedHeader = rest.slice(0, headerLen + 16);
-	const headerKey = vmessKDF16(
-		cmdKey,
-		KDFSaltConstVMessHeaderPayloadAEADKey,
-		authID,
-		nonce
+	const headerKey = vmessKDF16(cmdKey, KDFSaltConstVMessHeaderPayloadAEADKey, authID, nonce);
+	const headerNonce = vmessKDF(cmdKey, KDFSaltConstVMessHeaderPayloadAEADIV, authID, nonce).slice(
+		0,
+		12
 	);
-	const headerNonce = vmessKDF(
-		cmdKey,
-		KDFSaltConstVMessHeaderPayloadAEADIV,
-		authID,
-		nonce
-	).slice(0, 12);
 
 	let headerPt;
 	try {
@@ -771,19 +789,44 @@ export async function sealVMessAEADHeader(cmdKey, headerBytes, authID, nonce) {
 	const finalNonce = nonce || crypto.getRandomValues(new Uint8Array(8));
 	const lenPlain = new Uint8Array([(headerBytes.length >>> 8) & 0xff, headerBytes.length & 0xff]);
 
-	const lenKey = vmessKDF16(cmdKey, KDFSaltConstVMessHeaderPayloadLengthAEADKey, finalAuthID, finalNonce);
-	const lenNonce = vmessKDF(cmdKey, KDFSaltConstVMessHeaderPayloadLengthAEADIV, finalAuthID, finalNonce).slice(0, 12);
+	const lenKey = vmessKDF16(
+		cmdKey,
+		KDFSaltConstVMessHeaderPayloadLengthAEADKey,
+		finalAuthID,
+		finalNonce
+	);
+	const lenNonce = vmessKDF(
+		cmdKey,
+		KDFSaltConstVMessHeaderPayloadLengthAEADIV,
+		finalAuthID,
+		finalNonce
+	).slice(0, 12);
 	const encryptedLen = await aesGcmEncrypt(lenKey, lenNonce, lenPlain, finalAuthID);
 
-	const headerKey = vmessKDF16(cmdKey, KDFSaltConstVMessHeaderPayloadAEADKey, finalAuthID, finalNonce);
-	const headerNonce = vmessKDF(cmdKey, KDFSaltConstVMessHeaderPayloadAEADIV, finalAuthID, finalNonce).slice(0, 12);
+	const headerKey = vmessKDF16(
+		cmdKey,
+		KDFSaltConstVMessHeaderPayloadAEADKey,
+		finalAuthID,
+		finalNonce
+	);
+	const headerNonce = vmessKDF(
+		cmdKey,
+		KDFSaltConstVMessHeaderPayloadAEADIV,
+		finalAuthID,
+		finalNonce
+	).slice(0, 12);
 	const encryptedHeader = await aesGcmEncrypt(headerKey, headerNonce, headerBytes, finalAuthID);
 
-	const out = new Uint8Array(finalAuthID.length + encryptedLen.length + finalNonce.length + encryptedHeader.length);
+	const out = new Uint8Array(
+		finalAuthID.length + encryptedLen.length + finalNonce.length + encryptedHeader.length
+	);
 	let offset = 0;
-	out.set(finalAuthID, offset); offset += finalAuthID.length;
-	out.set(encryptedLen, offset); offset += encryptedLen.length;
-	out.set(finalNonce, offset); offset += finalNonce.length;
+	out.set(finalAuthID, offset);
+	offset += finalAuthID.length;
+	out.set(encryptedLen, offset);
+	offset += encryptedLen.length;
+	out.set(finalNonce, offset);
+	offset += finalNonce.length;
 	out.set(encryptedHeader, offset);
 	return out;
 }
@@ -1023,7 +1066,7 @@ export async function* vmessBodyReader(buffer, bodyKey, bodyIV, security, option
 	let count = 0;
 	const hasMask = (option & 0x04) !== 0;
 	const hasPadding = (option & 0x08) !== 0;
-	const shakeParser = (hasMask || hasPadding) ? new ShakeSizeParser(bodyIV) : null;
+	const shakeParser = hasMask || hasPadding ? new ShakeSizeParser(bodyIV) : null;
 
 	while (offset + 2 <= buffer.length) {
 		// Xray calls NextPaddingLen() BEFORE Decode() — both consume SHAKE128

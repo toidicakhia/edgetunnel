@@ -10,7 +10,6 @@ import { createRequestTCPConnector } from './proxy.js';
 import { pureMD5Bytes, sha224 } from '../utils/crypto.js';
 import { stripIPv6Brackets } from '../utils/network.js';
 
-
 export const trojanTextDecoder = new TextDecoder();
 
 export function parseTrojanProxyAddress(address) {

@@ -46,4 +46,3 @@ export function handleHTTPUpgradeRequest(request, config = {}) {
 
 	return { ok: true, response };
 }
-

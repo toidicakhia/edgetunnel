@@ -128,7 +128,7 @@ export class InboundServer {
 						out[1] = payload.byteLength & 0xff;
 						out.set(payload, 2);
 						return out;
-				  })();
+					})();
 		try {
 			const tcpConnector = createRequestTCPConnector(request);
 			const tcpSocket = tcpConnector({ hostname: '8.8.4.4', port: 53 });

@@ -16,7 +16,6 @@ import { doHQuery, resolveAddressPort } from '../utils/doh.js';
 import { getValidDataLength, log, toUint8Array } from '../utils/helpers.js';
 import { isDestinationSafe, isIPHostname, isIPv4 } from '../utils/network.js';
 
-
 export async function forwardTCP(
 	host,
 	portNum,
@@ -449,7 +448,7 @@ export async function forwardUDP(udpChunk, webSocket, respHeader, request, respo
 					framed[1] = requestData.byteLength & 0xff;
 					framed.set(requestData, 2);
 					return framed;
-			  })();
+				})();
 		await writer.write(framedRequest);
 		log(`[UDPforward] DNS requestwasWrittenupstream: ${framedRequest.byteLength}B`);
 		writer.releaseLock();
@@ -497,14 +496,12 @@ export async function forwardUDP(udpChunk, webSocket, respHeader, request, respo
 export function closeSocketQuietly(socket) {
 	try {
 		if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CLOSING) {
-
 			socket.close();
 		}
 	} catch {}
 }
 
 export async function webSocketSendAndAwait(webSocket, payload) {
-
 	const sendResult = webSocket.send(payload);
 	if (sendResult && typeof sendResult.then === 'function') await sendResult;
 }
@@ -544,4 +541,3 @@ export function startTCPConnectorGeneration(remoteConnWrapper) {
 	} catch {}
 	return { generation, downlinkDrain };
 }
-

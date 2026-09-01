@@ -15,7 +15,6 @@ import {
 import { closeSocketQuietly, webSocketSendAndAwait } from './tcp.js';
 import { getValidDataLength, log, toUint8Array } from '../../utils/helpers.js';
 
-
 export function createGrainBundler(capacity, copyBundleResult = false) {
 	let queue = [];
 	let head = 0;

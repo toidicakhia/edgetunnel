@@ -18,4 +18,3 @@ export class Client extends Feature {
 		throw new Error('dns client lookupIP not implemented');
 	}
 }
-

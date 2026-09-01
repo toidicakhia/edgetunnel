@@ -29,7 +29,9 @@ export class FreedomHandler extends Handler {
 			this._connector =
 				fetcher && typeof fetcher.connect === 'function'
 					? (options, init) =>
-							init === undefined ? fetcher.connect(options) : fetcher.connect(options, init)
+							init === undefined
+								? fetcher.connect(options)
+								: fetcher.connect(options, init)
 					: null;
 		}
 		return this._connector;
@@ -70,13 +72,28 @@ export class FreedomHandler extends Handler {
 					: ipv4List.concat(ipv6List.slice(0, dialLimit - ipv4List.length));
 			if (ipList.length === 0) {
 				log(`[freedom] ${address} no valid A/AAAA, fallback to original hostname`);
-				return Array.from({ length: dialLimit }, (_, attempt) => ({ hostname: address, port, attempt }));
+				return Array.from({ length: dialLimit }, (_, attempt) => ({
+					hostname: address,
+					port,
+					attempt,
+				}));
 			}
-			log(`[freedom] ${address} race dial ${ipList.length}/${dialLimit}: ${ipList.join(', ')}`);
-			return ipList.map((hostname, attempt) => ({ hostname, port, attempt, resolvedFrom: address }));
+			log(
+				`[freedom] ${address} race dial ${ipList.length}/${dialLimit}: ${ipList.join(', ')}`
+			);
+			return ipList.map((hostname, attempt) => ({
+				hostname,
+				port,
+				attempt,
+				resolvedFrom: address,
+			}));
 		}
 		const dialLimit = Math.max(1, TCP_CONCURRENT_DIAL_COUNT | 0);
-		return Array.from({ length: dialLimit }, (_, attempt) => ({ hostname: address, port, attempt }));
+		return Array.from({ length: dialLimit }, (_, attempt) => ({
+			hostname: address,
+			port,
+			attempt,
+		}));
 	}
 
 	/** Open candidates concurrently; first-opened wins, losers closed. */

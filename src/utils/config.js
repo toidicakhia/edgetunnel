@@ -125,7 +125,9 @@ export async function readConfigJSON(
 
 	const configJSON = await env.KV.get('config.json');
 	if (!configJSON || resetConfig == true) {
-		await env.KV.put('config.json', JSON.stringify(defaultConfigJSON, null, 2)).catch?.(() => {});
+		await env.KV.put('config.json', JSON.stringify(defaultConfigJSON, null, 2)).catch?.(
+			() => {}
+		);
 		config_JSON = defaultConfigJSON;
 	} else {
 		config_JSON = tryParseJSON(configJSON, defaultConfigJSON);
@@ -259,9 +261,7 @@ export async function readConfigJSON(
 			config_JSON.CF.AccountID = CF_JSON.AccountID
 				? maskSensitiveInfo(CF_JSON.AccountID)
 				: null;
-			config_JSON.CF.APIToken = CF_JSON.APIToken
-				? maskSensitiveInfo(CF_JSON.APIToken)
-				: null;
+			config_JSON.CF.APIToken = CF_JSON.APIToken ? maskSensitiveInfo(CF_JSON.APIToken) : null;
 			config_JSON.CF.UsageAPI = null;
 			const Usage = await getCloudflareUsage(
 				CF_JSON.Email,

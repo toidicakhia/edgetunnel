@@ -27,7 +27,13 @@ import {
 	vlessTextDecoder,
 } from '../core/protocol.js';
 import { buildWSLocal204Response, createUplinkWriteQueue, isSpeedTestSite } from '../core/grain.js';
-import { closeSocketQuietly, forwardTCP, forwardUDP, invalidateTCPConnectorGeneration, webSocketSendAndAwait } from '../core/tcp.js';
+import {
+	closeSocketQuietly,
+	forwardTCP,
+	forwardUDP,
+	invalidateTCPConnectorGeneration,
+	webSocketSendAndAwait,
+} from '../core/tcp.js';
 import { concatByteData, getValidDataLength, log, toUint8Array } from '../utils/helpers.js';
 import {
 	parseVMessRequest,
@@ -39,7 +45,6 @@ import {
 	getCmdKey,
 	decodeAuthID,
 } from '../core/vmess.js';
-
 
 export function isValidWSEarlyData(bytes, token) {
 	if (!bytes?.byteLength) return false;
@@ -128,7 +133,6 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 	let wsLocalSpeedTestRequestCache = new Uint8Array(0);
 	let wsLocalSpeedTestFirstPacketResponseHeader = null;
 	const wsLocalSpeedTestRequestLimit = 64 * 1024;
-
 
 	const sendWSLocalSpeedTestResponse = async () => {
 		if (!wsLocalSpeedTestResponseSocket) return;
@@ -542,7 +546,6 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 							}
 						);
 					}).catch((error) => {
-
 						log(`[SSsend] encryption failed: ${error?.message || error}`);
 						closeSocketQuietly(serverSock);
 					});
@@ -593,7 +596,6 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 	};
 
 	const handleSSData = async (chunk) => {
-
 		const context = await getSSContext();
 		let plaintextChunks = null;
 		try {
@@ -606,7 +608,6 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 				msg.includes('SS length decrypt failed') ||
 				msg.includes('SS payload decrypt failed')
 			) {
-
 				log(`[SS Inbound] decryption failed，connection closed: ${msg}`);
 				closeSocketQuietly(serverSock);
 				return;
@@ -627,7 +628,6 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			}
 			if (wasWritten) continue;
 			if (context.firstPacketEstablished && context.targetHost && context.targetPort > 0) {
-
 				await forwardTCP(
 					context.targetHost,
 					context.targetPort,
@@ -797,7 +797,8 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			const parsed = await parseVMessRequest(ctx.buffer, yourUUID);
 			if (parsed.hasError) {
 				if (
-					(parsed.message?.includes('too short') || parsed.message?.includes('AEAD open failed')) &&
+					(parsed.message?.includes('too short') ||
+						parsed.message?.includes('AEAD open failed')) &&
 					ctx.buffer.byteLength < 2048
 				) {
 					return; // Wait for more data
@@ -813,7 +814,9 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			ctx.option = parsed.option;
 			ctx.responseHeader = parsed.responseHeader;
 			ctx.firstPacketEstablished = true;
-			log(`[VMess] parsed: host=${ctx.targetHost}:${ctx.targetPort} sec=${ctx.security} rawLen=${parsed.rawClientData?.byteLength ?? 0}`);
+			log(
+				`[VMess] parsed: host=${ctx.targetHost}:${ctx.targetPort} sec=${ctx.security} rawLen=${parsed.rawClientData?.byteLength ?? 0}`
+			);
 
 			// Handle speed test
 			if (isSpeedTestSite(ctx.targetHost) && proxyContext.proxyType === null) {
@@ -828,8 +831,9 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			ctx.respBodyIV = bodyIVHash.slice(0, 16);
 			ctx.respCount = 0;
 			ctx.respHeaderSent = false;
-			ctx.respShakeParser = (ctx.option & 0x04) ? new ShakeSizeParser(ctx.respBodyIV) : null;
-			ctx.reqShakeParser = ((ctx.option & 0x04) || (ctx.option & 0x08)) ? new ShakeSizeParser(ctx.bodyIV) : null;
+			ctx.respShakeParser = ctx.option & 0x04 ? new ShakeSizeParser(ctx.respBodyIV) : null;
+			ctx.reqShakeParser =
+				ctx.option & 0x04 || ctx.option & 0x08 ? new ShakeSizeParser(ctx.bodyIV) : null;
 
 			// Create VMess response socket that encrypts response with sequential queue
 			let sendQueue = Promise.resolve();
@@ -872,7 +876,7 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 									// Xray server: NextPaddingLen() BEFORE Encode() — both consume SHAKE128;
 									// padding bytes are sent clear AFTER the ciphertext and included in the size
 									let padLen = 0;
-									if (ctx.respShakeParser && (ctx.option & 0x08)) {
+									if (ctx.respShakeParser && ctx.option & 0x08) {
 										padLen = ctx.respShakeParser.nextPaddingLen();
 									}
 									const encChunk = await vmessEncryptChunk(
@@ -939,7 +943,9 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			}
 
 			// Establish TCP connection ONCE with all decrypted initial plaintext
-			log(`[VMess] forwardTCP: ${ctx.targetHost}:${ctx.targetPort} plainLen=${firstPlaintext.byteLength} sec=${ctx.security}`);
+			log(
+				`[VMess] forwardTCP: ${ctx.targetHost}:${ctx.targetPort} plainLen=${firstPlaintext.byteLength} sec=${ctx.security}`
+			);
 			await forwardTCP(
 				ctx.targetHost,
 				ctx.targetPort,
@@ -996,7 +1002,11 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 			} else {
 				currentChunkBytes = currentChunkBytes || toUint8Array(chunk);
 				const bytes = currentChunkBytes;
-				if (bytes.byteLength >= 18 && bytes[0] === 0 && uuidBytesMatch(bytes, 1, yourUUID)) {
+				if (
+					bytes.byteLength >= 18 &&
+					bytes[0] === 0 &&
+					uuidBytesMatch(bytes, 1, yourUUID)
+				) {
 					determineProtocolType = 'VLESS';
 				} else if (
 					bytes.byteLength >= 58 &&
@@ -1122,7 +1132,6 @@ export async function handleWSRequest(request, yourUUID, url, proxyContext = {})
 	};
 
 	const handleWSExplicitTransferError = (err) => {
-
 		if (wsExplicitTransferFailed) return;
 		wsExplicitTransferFailed = true;
 		wsExplicitTransferStopReceiving = true;

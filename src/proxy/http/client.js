@@ -3,7 +3,13 @@
  * HTTP CONNECT chain-proxy clients (http + https) — split from src/core/proxy.js
  * (rewrite by Xray-core layout; matches proxy/http client semantics).
  */
-import { concatByteData, getValidDataLength, log, safeCloseAll, toUint8Array } from '../../utils/helpers.js';
+import {
+	concatByteData,
+	getValidDataLength,
+	log,
+	safeCloseAll,
+	toUint8Array,
+} from '../../utils/helpers.js';
 import { isIPHostname, stripIPv6Brackets } from '../../utils/network.js';
 import { TlsClient } from '../../transport/internet/tls.js';
 
@@ -246,4 +252,3 @@ export async function httpsConnect(
 		throw error;
 	}
 }
-

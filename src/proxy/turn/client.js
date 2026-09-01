@@ -4,7 +4,14 @@
  * Original: edgetunnel 2.1 (2026-08-11)
  */
 import { CONNECT_TIMEOUT_MS, doHQuery } from '../../utils/doh.js';
-import { concatByteData, getValidDataLength, safeClose, safeCloseAll, safeRelease, toUint8Array } from '../../utils/helpers.js';
+import {
+	concatByteData,
+	getValidDataLength,
+	safeClose,
+	safeCloseAll,
+	safeRelease,
+	toUint8Array,
+} from '../../utils/helpers.js';
 import { isIPv4, stripIPv6Brackets, withTimeout } from '../../utils/network.js';
 
 import { textDecoder, textEncoder } from '../../transport/internet/tls.js';

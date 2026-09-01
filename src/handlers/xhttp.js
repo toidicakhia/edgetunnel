@@ -3,8 +3,18 @@ import {
 	createUplinkGrainBundleStream,
 	isSpeedTestSite,
 } from '../core/grain.js';
-import { closeSocketQuietly, forwardTCP, forwardUDP, invalidateTCPConnectorGeneration } from '../core/tcp.js';
-import { forwardTrojanUDPData, uuidBytesMatch, vlessTextDecoder, getUUIDBytes } from '../core/protocol.js';
+import {
+	closeSocketQuietly,
+	forwardTCP,
+	forwardUDP,
+	invalidateTCPConnectorGeneration,
+} from '../core/tcp.js';
+import {
+	forwardTrojanUDPData,
+	uuidBytesMatch,
+	vlessTextDecoder,
+	getUUIDBytes,
+} from '../core/protocol.js';
 import { concatByteData, getValidDataLength, log } from '../utils/helpers.js';
 import { sha224 } from '../utils/crypto.js';
 import { parseVMessRequest, getCmdKey, decodeAuthID } from '../core/vmess.js';
@@ -188,7 +198,6 @@ export async function handleXHTTPRequest(request, yourUUID, proxyContext = {}) {
 		} catch {}
 		invalidateTCPConnectorGeneration(remoteConnWrapper);
 	};
-
 
 	const placeholderWS = { readyState: WebSocket.OPEN };
 

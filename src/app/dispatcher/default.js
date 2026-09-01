@@ -75,7 +75,9 @@ export class DefaultDispatcher extends Dispatcher {
 				p.interrupt();
 				ctx.interrupt();
 				if (!ctx.content.attributes.get('silent-error')) {
-					logError(`[dispatcher] ${ctx.target?.toString?.() || ''}: ${err?.message || err}`);
+					logError(
+						`[dispatcher] ${ctx.target?.toString?.() || ''}: ${err?.message || err}`
+					);
 				}
 			});
 		return p;

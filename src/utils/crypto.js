@@ -104,8 +104,7 @@ export function pureMD5(string) {
 		while (lByteCount < lMessageLength) {
 			const lWordCount = (lByteCount - (lByteCount % 4)) / 4;
 			lBytePosition = (lByteCount % 4) * 8;
-			lWordArray[lWordCount] =
-				lWordArray[lWordCount] | (bytes[lByteCount] << lBytePosition);
+			lWordArray[lWordCount] = lWordArray[lWordCount] | (bytes[lByteCount] << lBytePosition);
 			lByteCount++;
 		}
 		const lWordCount = (lByteCount - (lByteCount % 4)) / 4;
@@ -262,7 +261,10 @@ export async function MD5MD5(text) {
 			.map((bytes) => bytes.toString(16).padStart(2, '0'))
 			.join('');
 
-		const secondHash = await crypto.subtle.digest('MD5', _textEncoder.encode(firstHex.slice(7, 27)));
+		const secondHash = await crypto.subtle.digest(
+			'MD5',
+			_textEncoder.encode(firstHex.slice(7, 27))
+		);
 		const secondHashArray = Array.from(new Uint8Array(secondHash));
 		const secondHex = secondHashArray
 			.map((bytes) => bytes.toString(16).padStart(2, '0'))

@@ -299,7 +299,9 @@ export function encodeVLESSUDPPacket(payload) {
 
 /** Decode VLESS UDP frames from a byte buffer; returns { packets, rest }. */
 export function decodeVLESSUDPPackets(chunk, buffer = new Uint8Array(0)) {
-	const input = buffer.byteLength ? concatBytes(buffer, toUint8Array(chunk)) : toUint8Array(chunk);
+	const input = buffer.byteLength
+		? concatBytes(buffer, toUint8Array(chunk))
+		: toUint8Array(chunk);
 	const packets = [];
 	let cursor = 0;
 	while (cursor + 2 <= input.byteLength) {

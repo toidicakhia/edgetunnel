@@ -38,4 +38,3 @@ export class Done {
 		return new Promise((resolve) => this._waiters.push(resolve));
 	}
 }
-
