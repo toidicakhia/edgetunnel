@@ -1,1135 +1,565 @@
 /**
  * src/html/admin.js
- * Native English Admin Dashboard for EdgeTunnel
- * Complete standalone interface: Settings, Subscriptions, Proxy, Notifications, Analytics, Logs
+ * Modern Admin Dashboard for EdgeTunnel v2.1
+ * Sidebar layout · Glassmorphism · Skeleton loaders · Mobile-first
  */
 
 export function adminPage() {
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<meta name="robots" content="noindex, nofollow">
-	<title>EdgeTunnel - Admin Dashboard</title>
-	<link rel="preconnect" href="https://fonts.googleapis.com">
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-	<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-	<style>
-		:root {
-			--bg-base: #0a0f1d;
-			--bg-surface: #111827;
-			--bg-card: rgba(17, 24, 39, 0.75);
-			--bg-card-hover: rgba(31, 41, 55, 0.85);
-			--border: rgba(255, 255, 255, 0.08);
-			--border-focus: rgba(246, 130, 31, 0.5);
-			--accent: #f6821f;
-			--accent-hover: #ff9436;
-			--accent-glow: rgba(246, 130, 31, 0.25);
-			--text-main: #f8fafc;
-			--text-muted: #94a3b8;
-			--text-dim: #64748b;
-			--success: #10b981;
-			--warning: #f59e0b;
-			--danger: #ef4444;
-			--radius: 12px;
-			--radius-sm: 8px;
-			--transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-		}
-
-		* {
-			margin: 0;
-			padding: 0;
-			box-sizing: border-box;
-		}
-
-		body {
-			font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-			background-color: var(--bg-base);
-			color: var(--text-main);
-			min-height: 100vh;
-			display: flex;
-			flex-direction: column;
-			overflow-x: hidden;
-			background-image: 
-				radial-gradient(at 0% 0%, rgba(246, 130, 31, 0.08) 0px, transparent 50%),
-				radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.05) 0px, transparent 50%);
-		}
-
-		/* Header */
-		header {
-			position: sticky;
-			top: 0;
-			z-index: 50;
-			backdrop-filter: blur(16px);
-			-webkit-backdrop-filter: blur(16px);
-			background: rgba(10, 15, 29, 0.85);
-			border-bottom: 1px solid var(--border);
-			padding: 0.85rem 1.5rem;
-		}
-
-		.header-container {
-			max-width: 1320px;
-			margin: 0 auto;
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			gap: 1rem;
-		}
-
-		.brand {
-			display: flex;
-			align-items: center;
-			gap: 0.75rem;
-			text-decoration: none;
-			color: var(--text-main);
-		}
-
-		.brand-icon {
-			width: 36px;
-			height: 36px;
-			background: linear-gradient(135deg, var(--accent), #ff5e00);
-			border-radius: var(--radius-sm);
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			font-weight: 700;
-			font-size: 1.1rem;
-			color: #fff;
-			box-shadow: 0 0 16px var(--accent-glow);
-		}
-
-		.brand-name {
-			font-size: 1.15rem;
-			font-weight: 700;
-			letter-spacing: -0.02em;
-		}
-
-		.brand-badge {
-			font-size: 0.7rem;
-			padding: 0.15rem 0.5rem;
-			background: rgba(246, 130, 31, 0.15);
-			color: var(--accent);
-			border-radius: 9999px;
-			border: 1px solid rgba(246, 130, 31, 0.3);
-			font-weight: 600;
-		}
-
-		.header-actions {
-			display: flex;
-			align-items: center;
-			gap: 0.75rem;
-		}
-
-		/* Buttons */
-		.btn {
-			display: inline-flex;
-			align-items: center;
-			justify-content: center;
-			gap: 0.5rem;
-			padding: 0.55rem 1.1rem;
-			font-size: 0.875rem;
-			font-weight: 600;
-			font-family: inherit;
-			border-radius: var(--radius-sm);
-			border: 1px solid transparent;
-			cursor: pointer;
-			transition: var(--transition);
-			text-decoration: none;
-		}
-
-		.btn-primary {
-			background: linear-gradient(135deg, var(--accent), #e06600);
-			color: #fff;
-			box-shadow: 0 2px 10px var(--accent-glow);
-		}
-
-		.btn-primary:hover {
-			background: linear-gradient(135deg, var(--accent-hover), #f6821f);
-			box-shadow: 0 4px 16px rgba(246, 130, 31, 0.4);
-			transform: translateY(-1px);
-		}
-
-		.btn-secondary {
-			background: rgba(255, 255, 255, 0.05);
-			color: var(--text-main);
-			border: 1px solid var(--border);
-		}
-
-		.btn-secondary:hover {
-			background: rgba(255, 255, 255, 0.1);
-			border-color: rgba(255, 255, 255, 0.15);
-			transform: translateY(-1px);
-		}
-
-		.btn-danger {
-			background: rgba(239, 68, 68, 0.15);
-			color: #f87171;
-			border: 1px solid rgba(239, 68, 68, 0.3);
-		}
-
-		.btn-danger:hover {
-			background: rgba(239, 68, 68, 0.25);
-			border-color: rgba(239, 68, 68, 0.5);
-			transform: translateY(-1px);
-		}
-
-		.btn-sm {
-			padding: 0.35rem 0.75rem;
-			font-size: 0.8rem;
-		}
-
-		/* Main Layout */
-		main {
-			flex: 1;
-			max-width: 1320px;
-			width: 100%;
-			margin: 0 auto;
-			padding: 1.75rem 1.5rem 3rem;
-			display: flex;
-			flex-direction: column;
-			gap: 1.5rem;
-		}
-
-		/* Overview Grid */
-		.overview-grid {
-			display: grid;
-			grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-			gap: 1rem;
-		}
-
-		.stat-card {
-			background: var(--bg-card);
-			border: 1px solid var(--border);
-			border-radius: var(--radius);
-			padding: 1.25rem;
-			display: flex;
-			flex-direction: column;
-			gap: 0.5rem;
-			backdrop-filter: blur(12px);
-			transition: var(--transition);
-		}
-
-		.stat-card:hover {
-			border-color: rgba(255, 255, 255, 0.15);
-			transform: translateY(-2px);
-		}
-
-		.stat-label {
-			font-size: 0.8rem;
-			font-weight: 500;
-			color: var(--text-muted);
-			text-transform: uppercase;
-			letter-spacing: 0.05em;
-		}
-
-		.stat-value {
-			font-size: 1.35rem;
-			font-weight: 700;
-			color: var(--text-main);
-			display: flex;
-			align-items: center;
-			gap: 0.5rem;
-			word-break: break-all;
-		}
-
-		.stat-value code {
-			font-family: 'JetBrains Mono', monospace;
-			font-size: 1rem;
-			color: var(--accent);
-		}
-
-		/* Navigation Tabs */
-		.tabs-container {
-			display: flex;
-			gap: 0.5rem;
-			overflow-x: auto;
-			padding-bottom: 0.5rem;
-			border-bottom: 1px solid var(--border);
-		}
-
-		.tabs-container::-webkit-scrollbar {
-			height: 4px;
-		}
-
-		.tabs-container::-webkit-scrollbar-thumb {
-			background: rgba(255, 255, 255, 0.1);
-			border-radius: 4px;
-		}
-
-		.tab-btn {
-			padding: 0.65rem 1.25rem;
-			background: transparent;
-			border: none;
-			border-bottom: 2px solid transparent;
-			color: var(--text-muted);
-			font-family: inherit;
-			font-size: 0.9rem;
-			font-weight: 600;
-			cursor: pointer;
-			transition: var(--transition);
-			white-space: nowrap;
-			display: flex;
-			align-items: center;
-			gap: 0.5rem;
-		}
-
-		.tab-btn:hover {
-			color: var(--text-main);
-			background: rgba(255, 255, 255, 0.03);
-			border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-		}
-
-		.tab-btn.active {
-			color: var(--accent);
-			border-bottom-color: var(--accent);
-		}
-
-		/* Tab Panels */
-		.tab-panel {
-			display: none;
-			flex-direction: column;
-			gap: 1.5rem;
-			animation: fadeIn 0.25s ease-out;
-		}
-
-		.tab-panel.active {
-			display: flex;
-		}
-
-		@keyframes fadeIn {
-			from { opacity: 0; transform: translateY(6px); }
-			to { opacity: 1; transform: translateY(0); }
-		}
-
-		/* Cards */
-		.card {
-			background: var(--bg-card);
-			border: 1px solid var(--border);
-			border-radius: var(--radius);
-			padding: 1.5rem;
-			backdrop-filter: blur(12px);
-			display: flex;
-			flex-direction: column;
-			gap: 1.25rem;
-		}
-
-		.card-header {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-			padding-bottom: 0.75rem;
-		}
-
-		.card-title {
-			font-size: 1.1rem;
-			font-weight: 700;
-			display: flex;
-			align-items: center;
-			gap: 0.6rem;
-		}
-
-		.card-desc {
-			font-size: 0.85rem;
-			color: var(--text-muted);
-		}
-
-		/* Form Controls */
-		.form-grid {
-			display: grid;
-			grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-			gap: 1.25rem;
-		}
-
-		.form-group {
-			display: flex;
-			flex-direction: column;
-			gap: 0.4rem;
-		}
-
-		.form-label {
-			font-size: 0.85rem;
-			font-weight: 600;
-			color: var(--text-main);
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-		}
-
-		.form-label span.desc {
-			font-size: 0.75rem;
-			font-weight: 400;
-			color: var(--text-dim);
-		}
-
-		.form-control, select, textarea {
-			width: 100%;
-			padding: 0.65rem 0.85rem;
-			background: rgba(15, 23, 42, 0.6);
-			border: 1px solid var(--border);
-			border-radius: var(--radius-sm);
-			color: var(--text-main);
-			font-family: inherit;
-			font-size: 0.9rem;
-			transition: var(--transition);
-		}
-
-		.form-control:focus, select:focus, textarea:focus {
-			outline: none;
-			border-color: var(--accent);
-			box-shadow: 0 0 0 3px var(--accent-glow);
-			background: rgba(15, 23, 42, 0.9);
-		}
-
-		textarea {
-			resize: vertical;
-			min-height: 120px;
-			font-family: 'JetBrains Mono', monospace;
-			font-size: 0.85rem;
-			line-height: 1.5;
-		}
-
-		/* Switch Toggle */
-		.toggle-group {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			padding: 0.75rem 1rem;
-			background: rgba(15, 23, 42, 0.4);
-			border: 1px solid var(--border);
-			border-radius: var(--radius-sm);
-		}
-
-		.toggle-info {
-			display: flex;
-			flex-direction: column;
-			gap: 0.2rem;
-		}
-
-		.toggle-title {
-			font-size: 0.9rem;
-			font-weight: 600;
-		}
-
-		.toggle-desc {
-			font-size: 0.75rem;
-			color: var(--text-dim);
-		}
-
-		.switch {
-			position: relative;
-			display: inline-block;
-			width: 44px;
-			height: 24px;
-			flex-shrink: 0;
-		}
-
-		.switch input {
-			opacity: 0;
-			width: 0;
-			height: 0;
-		}
-
-		.slider {
-			position: absolute;
-			cursor: pointer;
-			top: 0;
-			left: 0;
-			right: 0;
-			bottom: 0;
-			background-color: rgba(255, 255, 255, 0.15);
-			transition: var(--transition);
-			border-radius: 24px;
-		}
-
-		.slider:before {
-			position: absolute;
-			content: "";
-			height: 18px;
-			width: 18px;
-			left: 3px;
-			bottom: 3px;
-			background-color: white;
-			transition: var(--transition);
-			border-radius: 50%;
-		}
-
-		input:checked + .slider {
-			background-color: var(--accent);
-		}
-
-		input:checked + .slider:before {
-			transform: translateX(20px);
-		}
-
-		/* Link Box */
-		.link-box {
-			display: flex;
-			align-items: center;
-			gap: 0.5rem;
-			background: rgba(15, 23, 42, 0.7);
-			border: 1px solid var(--border);
-			border-radius: var(--radius-sm);
-			padding: 0.5rem 0.75rem;
-		}
-
-		.link-text {
-			flex: 1;
-			font-family: 'JetBrains Mono', monospace;
-			font-size: 0.85rem;
-			color: var(--text-muted);
-			overflow: hidden;
-			text-overflow: ellipsis;
-			white-space: nowrap;
-		}
-
-		/* Toast Notification */
-		#toast {
-			position: fixed;
-			bottom: 2rem;
-			right: 2rem;
-			padding: 0.85rem 1.25rem;
-			background: rgba(17, 24, 39, 0.95);
-			border: 1px solid var(--border);
-			border-radius: var(--radius-sm);
-			color: #fff;
-			font-size: 0.9rem;
-			font-weight: 500;
-			box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-			backdrop-filter: blur(12px);
-			display: flex;
-			align-items: center;
-			gap: 0.75rem;
-			transform: translateY(100px);
-			opacity: 0;
-			transition: var(--transition);
-			z-index: 100;
-		}
-
-		#toast.show {
-			transform: translateY(0);
-			opacity: 1;
-		}
-
-		#toast.success { border-left: 4px solid var(--success); }
-		#toast.error { border-left: 4px solid var(--danger); }
-		#toast.info { border-left: 4px solid var(--accent); }
-
-		/* Modal */
-		.modal-overlay {
-			position: fixed;
-			top: 0;
-			left: 0;
-			width: 100%;
-			height: 100%;
-			background: rgba(0, 0, 0, 0.7);
-			backdrop-filter: blur(6px);
-			display: none;
-			align-items: center;
-			justify-content: center;
-			z-index: 90;
-			padding: 1rem;
-		}
-
-		.modal-overlay.open {
-			display: flex;
-		}
-
-		.modal-content {
-			background: var(--bg-surface);
-			border: 1px solid var(--border);
-			border-radius: var(--radius);
-			max-width: 500px;
-			width: 100%;
-			padding: 1.5rem;
-			display: flex;
-			flex-direction: column;
-			gap: 1.25rem;
-			box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
-		}
-
-		.modal-header {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			font-weight: 700;
-			font-size: 1.1rem;
-		}
-
-		.modal-close {
-			background: transparent;
-			border: none;
-			color: var(--text-muted);
-			font-size: 1.25rem;
-			cursor: pointer;
-		}
-
-		.qr-wrapper {
-			display: flex;
-			justify-content: center;
-			padding: 1rem;
-			background: #fff;
-			border-radius: var(--radius-sm);
-		}
-
-		@media (max-width: 768px) {
-			.header-container { flex-direction: column; align-items: stretch; }
-			.header-actions { justify-content: flex-end; }
-			.form-grid { grid-template-columns: 1fr; }
-		}
-	</style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>EdgeTunnel - Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0b0e14;--bg2:#111621;--bg3:#161c2a;--bg4:#1c2435;
+  --glass:rgba(17,22,33,.72);--glass2:rgba(22,28,42,.8);
+  --border:rgba(255,255,255,.06);--border2:rgba(255,255,255,.1);
+  --accent:#f6821f;--accent2:#ff9436;--accent-dim:rgba(246,130,31,.12);
+  --text:#f1f5f9;--text2:#94a3b8;--text3:#64748b;
+  --green:#22c55e;--red:#ef4444;--blue:#3b82f6;--yellow:#eab308;
+  --r:10px;--r2:14px;--r3:20px;
+  --shadow:0 8px 32px rgba(0,0,0,.35);
+  --ease:cubic-bezier(.4,0,.2,1);
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text)}
+
+/* ── animated bg ── */
+body::before{content:'';position:fixed;inset:0;z-index:-1;
+  background:radial-gradient(ellipse 80% 60% at 10% 20%,rgba(246,130,31,.07),transparent 60%),
+             radial-gradient(ellipse 60% 50% at 90% 80%,rgba(59,130,246,.05),transparent 60%)}
+
+/* ── layout ── */
+.layout{display:flex;height:100vh}
+
+/* ── sidebar ── */
+.sidebar{width:240px;min-width:240px;background:var(--glass2);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);z-index:20}
+.sidebar-brand{padding:1.25rem 1.1rem;display:flex;align-items:center;gap:.7rem;border-bottom:1px solid var(--border)}
+.sidebar-logo{width:38px;height:38px;border-radius:var(--r);background:linear-gradient(135deg,var(--accent),#e05a00);
+  display:grid;place-items:center;font-size:1.15rem;color:#fff;font-weight:800;box-shadow:0 0 20px rgba(246,130,31,.3)}
+.sidebar-brand-text{display:flex;flex-direction:column}
+.sidebar-brand-name{font-weight:700;font-size:.95rem;letter-spacing:-.02em}
+.sidebar-brand-sub{font-size:.7rem;color:var(--text3);font-weight:500}
+.sidebar-nav{flex:1;padding:.75rem .6rem;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+.nav-item{display:flex;align-items:center;gap:.65rem;padding:.6rem .75rem;border-radius:var(--r);
+  font-size:.85rem;font-weight:500;color:var(--text2);cursor:pointer;transition:all .15s var(--ease);
+  border:1px solid transparent;text-decoration:none}
+.nav-item:hover{color:var(--text);background:rgba(255,255,255,.04);border-color:var(--border)}
+.nav-item.active{color:var(--accent);background:var(--accent-dim);border-color:rgba(246,130,31,.15)}
+.nav-item .icon{width:18px;height:18px;flex-shrink:0;opacity:.7}
+.nav-item.active .icon{opacity:1}
+.sidebar-footer{padding:.75rem 1rem;border-top:1px solid var(--border)}
+.sidebar-footer .btn-logout{display:flex;align-items:center;gap:.5rem;width:100%;padding:.55rem .75rem;
+  border-radius:var(--r);font-size:.82rem;font-weight:500;color:var(--red);background:rgba(239,68,68,.08);
+  border:1px solid rgba(239,68,68,.15);cursor:pointer;transition:all .15s var(--ease);text-decoration:none;font-family:inherit}
+.sidebar-footer .btn-logout:hover{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.3)}
+
+/* ── main ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:56px;min-height:56px;background:var(--glass);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;backdrop-filter:blur(16px);gap:1rem}
+.topbar-left{display:flex;align-items:center;gap:1rem}
+.topbar-title{font-size:1.05rem;font-weight:700;letter-spacing:-.01em}
+.topbar-badge{font-size:.65rem;padding:.15rem .5rem;border-radius:99px;background:var(--accent-dim);
+  color:var(--accent);border:1px solid rgba(246,130,31,.2);font-weight:600}
+.topbar-right{display:flex;align-items:center;gap:.5rem}
+.topbar-host{font-size:.78rem;color:var(--text3);font-family:'JetBrains Mono',monospace}
+.btn{display:inline-flex;align-items:center;gap:.45rem;padding:.5rem .9rem;font-size:.82rem;font-weight:600;
+  font-family:inherit;border-radius:var(--r);border:1px solid transparent;cursor:pointer;transition:all .15s var(--ease);text-decoration:none;white-space:nowrap}
+.btn-accent{background:linear-gradient(135deg,var(--accent),#d96f00);color:#fff;box-shadow:0 2px 12px rgba(246,130,31,.25)}
+.btn-accent:hover{box-shadow:0 4px 20px rgba(246,130,31,.4);transform:translateY(-1px)}
+.btn-ghost{background:rgba(255,255,255,.04);color:var(--text);border-color:var(--border)}
+.btn-ghost:hover{background:rgba(255,255,255,.08);border-color:var(--border2)}
+.btn-danger{background:rgba(239,68,68,.1);color:var(--red);border-color:rgba(239,68,68,.2)}
+.btn-danger:hover{background:rgba(239,68,68,.18);border-color:rgba(239,68,68,.35)}
+.btn-sm{padding:.4rem .7rem;font-size:.78rem}
+
+/* ── content ── */
+.content{flex:1;overflow-y:auto;padding:1.5rem;scroll-behavior:smooth}
+.content::-webkit-scrollbar{width:6px}
+.content::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:3px}
+.content::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.14)}
+
+/* ── panels ── */
+.panel{display:none;animation:panelIn .3s var(--ease)}
+.panel.active{display:block}
+@keyframes panelIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ── stat cards ── */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1.25rem}
+.stat{background:var(--glass);border:1px solid var(--border);border-radius:var(--r2);padding:1rem 1.1rem;
+  backdrop-filter:blur(12px);transition:all .2s var(--ease)}
+.stat:hover{border-color:var(--border2);transform:translateY(-1px)}
+.stat-label{font-size:.72rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.3rem}
+.stat-val{font-size:1.15rem;font-weight:700;display:flex;align-items:center;gap:.4rem}
+.stat-val code{font-family:'JetBrains Mono',monospace;font-size:.92rem;color:var(--accent)}
+.stat-val .ok{color:var(--green)}
+
+/* ── card ── */
+.card{background:var(--glass);border:1px solid var(--border);border-radius:var(--r2);padding:1.25rem;
+  backdrop-filter:blur(12px);margin-bottom:1rem}
+.card-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem;padding-bottom:.75rem;
+  border-bottom:1px solid rgba(255,255,255,.04)}
+.card-title{font-size:.95rem;font-weight:700;display:flex;align-items:center;gap:.5rem}
+.card-desc{font-size:.78rem;color:var(--text3);margin-top:.2rem}
+
+/* ── forms ── */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem}
+.field{display:flex;flex-direction:column;gap:.35rem}
+.field label{font-size:.8rem;font-weight:600;color:var(--text2)}
+.field input,.field select,.field textarea{width:100%;padding:.55rem .75rem;background:rgba(10,14,20,.6);
+  border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:inherit;font-size:.85rem;
+  transition:all .15s var(--ease)}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(246,130,31,.12);background:rgba(10,14,20,.85)}
+.field textarea{min-height:110px;font-family:'JetBrains Mono',monospace;font-size:.8rem;line-height:1.5;resize:vertical}
+.field select{cursor:pointer}
+.field-hint{font-size:.72rem;color:var(--text3);margin-top:.35rem;line-height:1.4}
+
+/* ── toggle ── */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:.7rem .85rem;
+  background:rgba(10,14,20,.35);border:1px solid var(--border);border-radius:var(--r)}
+.toggle-info .t-title{font-size:.85rem;font-weight:600}
+.toggle-info .t-desc{font-size:.72rem;color:var(--text3)}
+.switch{position:relative;width:40px;height:22px;flex-shrink:0}
+.switch input{opacity:0;width:0;height:0}
+.switch .slider{position:absolute;inset:0;background:rgba(255,255,255,.12);border-radius:22px;cursor:pointer;transition:.2s var(--ease)}
+.switch .slider:before{content:'';position:absolute;left:3px;top:3px;width:16px;height:16px;background:#fff;
+  border-radius:50%;transition:.2s var(--ease)}
+.switch input:checked+.slider{background:var(--accent)}
+.switch input:checked+.slider:before{transform:translateX(18px)}
+
+/* ── link box ── */
+.link-box{display:flex;align-items:center;gap:.5rem;background:rgba(10,14,20,.55);border:1px solid var(--border);
+  border-radius:var(--r);padding:.5rem .7rem}
+.link-text{flex:1;font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--text2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── skeleton ── */
+.skeleton{background:linear-gradient(90deg,rgba(255,255,255,.04) 25%,rgba(255,255,255,.08) 50%,rgba(255,255,255,.04) 75%);
+  background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:var(--r)}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* ── toast ── */
+#toast{position:fixed;bottom:1.5rem;right:1.5rem;padding:.7rem 1.1rem;background:var(--bg3);
+  border:1px solid var(--border);border-radius:var(--r);color:#fff;font-size:.85rem;font-weight:500;
+  box-shadow:var(--shadow);display:flex;align-items:center;gap:.6rem;transform:translateY(80px);
+  opacity:0;transition:all .25s var(--ease);z-index:100;backdrop-filter:blur(12px)}
+#toast.show{transform:none;opacity:1}
+#toast.ok{border-left:3px solid var(--green)}
+#toast.err{border-left:3px solid var(--red)}
+#toast.info{border-left:3px solid var(--accent)}
+
+/* ── modal ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(6px);display:none;
+  place-items:center;z-index:90;padding:1rem}
+.modal-bg.open{display:grid}
+.modal{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r3);max-width:420px;width:100%;
+  padding:1.5rem;display:flex;flex-direction:column;gap:1rem;box-shadow:var(--shadow)}
+.modal-head{display:flex;align-items:center;justify-content:space-between;font-weight:700;font-size:.95rem}
+.modal-x{background:none;border:none;color:var(--text3);font-size:1.2rem;cursor:pointer;line-height:1}
+.modal-qr{display:flex;justify-content:center;padding:.75rem;background:#fff;border-radius:var(--r)}
+.modal-qr img{max-width:220px;width:100%;height:auto}
+
+/* ── danger zone ── */
+.danger-zone{border-color:rgba(239,68,68,.2)!important}
+.danger-zone .card-title{color:var(--red)}
+
+/* ── responsive ── */
+@media(max-width:900px){
+  .sidebar{position:fixed;left:0;top:0;bottom:0;transform:translateX(-100%);transition:transform .25s var(--ease);z-index:30}
+  .sidebar.open{transform:none;box-shadow:4px 0 30px rgba(0,0,0,.5)}
+  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:25}
+  .sidebar-overlay.open{display:block}
+  .menu-toggle{display:inline-flex!important}
+  .stats{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:500px){
+  .stats{grid-template-columns:1fr}
+  .form-grid{grid-template-columns:1fr}
+  .topbar{padding:0 .75rem}
+  .content{padding:1rem .75rem}
+}
+.menu-toggle{display:none;background:none;border:none;color:var(--text);font-size:1.2rem;cursor:pointer;padding:.25rem}
+</style>
 </head>
 <body>
+<div class="layout">
 
-	<!-- Header -->
-	<header>
-		<div class="header-container">
-			<a href="/admin" class="brand">
-				<div class="brand-icon">⚡</div>
-				<div>
-					<div style="display: flex; align-items: center; gap: 0.5rem;">
-						<span class="brand-name">EdgeTunnel</span>
-						<span class="brand-badge">v2.1</span>
-					</div>
-					<div style="font-size: 0.75rem; color: var(--text-dim);" id="header-host">Loading host...</div>
-				</div>
-			</a>
-			<div class="header-actions">
-				<button class="btn btn-secondary btn-sm" onclick="loadAllData()" title="Reload Data">🔄 Refresh</button>
-				<button class="btn btn-primary btn-sm" onclick="saveConfiguration()">💾 Save Config</button>
-				<a href="/logout" class="btn btn-danger btn-sm">🚪 Logout</a>
-			</div>
-		</div>
-	</header>
+<!-- Sidebar Overlay (mobile) -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
-	<!-- Main -->
-	<main>
-		<!-- Quick Stats Overview -->
-		<div class="overview-grid">
-			<div class="stat-card">
-				<div class="stat-label">Active Protocol</div>
-				<div class="stat-value"><code id="stat-protocol">-</code></div>
-			</div>
-			<div class="stat-card">
-				<div class="stat-label">Transport & gRPC</div>
-				<div class="stat-value"><code id="stat-transport">-</code></div>
-			</div>
-			<div class="stat-card">
-				<div class="stat-label">Cloudflare Usage (Today)</div>
-				<div class="stat-value" id="stat-cf-usage"><span style="color: var(--success);">0</span> / 100k</div>
-			</div>
-			<div class="stat-card">
-				<div class="stat-label">Config Load Time</div>
-				<div class="stat-value"><code id="stat-load-time">-</code></div>
-			</div>
-		</div>
+<!-- Sidebar -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="sidebar-logo">E</div>
+    <div class="sidebar-brand-text">
+      <span class="sidebar-brand-name">EdgeTunnel</span>
+      <span class="sidebar-brand-sub" id="sidebarHost">Loading...</span>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <a class="nav-item active" data-panel="overview" onclick="showPanel('overview',this)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Overview
+    </a>
+    <a class="nav-item" data-panel="links" onclick="showPanel('links',this)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      Node & Subscriptions
+    </a>
+    <a class="nav-item" data-panel="protocol" onclick="showPanel('protocol',this)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      Protocol & Network
+    </a>
+    <a class="nav-item" data-panel="subscriptions" onclick="showPanel('subscriptions',this)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+      Optimal Subscriptions
+    </a>
+    <a class="nav-item" data-panel="cloudflare" onclick="showPanel('cloudflare',this)">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+      Cloudflare API
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <a href="/logout" class="btn-logout">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Logout
+    </a>
+  </div>
+</aside>
 
-		<!-- Navigation Tabs -->
-		<div class="tabs-container">
-			<button class="tab-btn active" onclick="switchTab('nodes', this)">📋 Node Links & Subscriptions</button>
-			<button class="tab-btn" onclick="switchTab('network', this)">🌐 Cloudflare & Network</button>
-			<button class="tab-btn" onclick="switchTab('generator', this)">⚡ Optimal Subscriptions</button>
-			<button class="tab-btn" onclick="switchTab('cloudflare', this)">☁️ Cloudflare API</button>
-		</div>
+<!-- Main -->
+<div class="main">
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+      <span class="topbar-title" id="topbarTitle">Overview</span>
+      <span class="topbar-badge">v2.1</span>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-host" id="topbarHost">-</span>
+      <button class="btn btn-ghost btn-sm" onclick="loadAllData()">↻ Refresh</button>
+      <button class="btn btn-accent btn-sm" onclick="saveAll()">Save Config</button>
+    </div>
+  </header>
 
-		<!-- Tab 1: Node Links & Subscriptions -->
-		<div id="tab-nodes" class="tab-panel active">
-			<div class="card">
-				<div class="card-header">
-					<div>
-						<div class="card-title">🔗 Primary Node Link</div>
-						<div class="card-desc">Direct connection string generated dynamically based on your active protocol settings</div>
-					</div>
-					<button class="btn btn-secondary btn-sm" onclick="openQrModal('main')">📱 Show QR Code</button>
-				</div>
-				<div class="link-box">
-					<div class="link-text" id="primary-node-link">Loading node link...</div>
-					<button class="btn btn-primary btn-sm" onclick="copyText(document.getElementById('primary-node-link').textContent)">📋 Copy</button>
-				</div>
-			</div>
+  <!-- Content -->
+  <div class="content">
 
-			<div class="card">
-				<div class="card-header">
-					<div>
-						<div class="card-title">🔄 Client Subscription URLs</div>
-						<div class="card-desc">Import ready-to-use subscriptions into Clash, SingBox, Surge, Shadowrocket or V2Ray clients</div>
-					</div>
-				</div>
-				<div class="form-grid">
-					<div class="form-group">
-						<label class="form-label">Universal Auto-Adaptive Subscription</label>
-						<div class="link-box">
-							<div class="link-text" id="sub-auto">-</div>
-							<button class="btn btn-secondary btn-sm" onclick="copyText(document.getElementById('sub-auto').textContent)">Copy</button>
-						</div>
-					</div>
-					<div class="form-group">
-						<label class="form-label">Clash / Clash Meta URL</label>
-						<div class="link-box">
-							<div class="link-text" id="sub-clash">-</div>
-							<button class="btn btn-secondary btn-sm" onclick="copyText(document.getElementById('sub-clash').textContent)">Copy</button>
-						</div>
-					</div>
-					<div class="form-group">
-						<label class="form-label">Sing-Box URL</label>
-						<div class="link-box">
-							<div class="link-text" id="sub-singbox">-</div>
-							<button class="btn btn-secondary btn-sm" onclick="copyText(document.getElementById('sub-singbox').textContent)">Copy</button>
-						</div>
-					</div>
-					<div class="form-group">
-						<label class="form-label">Standard Base64 Subscription</label>
-						<div class="link-box">
-							<div class="link-text" id="sub-b64">-</div>
-							<button class="btn btn-secondary btn-sm" onclick="copyText(document.getElementById('sub-b64').textContent)">Copy</button>
-						</div>
-					</div>
-				</div>
-			</div>
-		</div>
+    <!-- ═══ Overview ═══ -->
+    <div class="panel active" id="panel-overview">
+      <div class="stats" id="statsGrid">
+        <div class="stat"><div class="stat-label">Protocol</div><div class="stat-val" id="s-proto"><div class="skeleton" style="width:60px;height:18px"></div></div></div>
+        <div class="stat"><div class="stat-label">Transport</div><div class="stat-val" id="s-transport"><div class="skeleton" style="width:80px;height:18px"></div></div></div>
+        <div class="stat"><div class="stat-label">CF Requests Today</div><div class="stat-val" id="s-cf"><div class="skeleton" style="width:100px;height:18px"></div></div></div>
+        <div class="stat"><div class="stat-label">Config Loaded</div><div class="stat-val" id="s-time"><div class="skeleton" style="width:50px;height:18px"></div></div></div>
+      </div>
 
-		<!-- Tab 2: Cloudflare & Network Settings -->
-		<div id="tab-network" class="tab-panel">
-			<div class="card">
-				<div class="card-header">
-					<div>
-						<div class="card-title">⚙️ Core Protocol & Connection Parameters</div>
-						<div class="card-desc">Configure tunneling protocol, transport layer, and TLS obfuscation parameters</div>
-					</div>
-				</div>
-				<div class="form-grid">
-					<div class="form-group">
-						<label class="form-label">Protocol Type</label>
-						<select id="cfg-protocolType">
-							<option value="vless">VLESS</option>
-							<option value="vmess">VMess</option>
-							<option value="ss">Shadowsocks (SS)</option>
-						</select>
-					</div>
-					<div class="form-group">
-						<label class="form-label">Transport Protocol</label>
-						<select id="cfg-transportProtocol">
-							<option value="ws">WebSocket (WS)</option>
-							<option value="grpc">gRPC</option>
-							<option value="xhttp">XHTTP / HTTP Upgrade</option>
-						</select>
-					</div>
-					<div class="form-group">
-						<label class="form-label">Node Path</label>
-						<input type="text" class="form-control" id="cfg-path" placeholder="/">
-					</div>
-					<div class="form-group">
-						<label class="form-label">Client Fingerprint</label>
-						<select id="cfg-fingerprint">
-							<option value="chrome">Chrome</option>
-							<option value="firefox">Firefox</option>
-							<option value="safari">Safari</option>
-							<option value="ios">iOS</option>
-							<option value="randomized">Randomized</option>
-						</select>
-					</div>
-					<div class="form-group">
-						<label class="form-label">TLS Fragment</label>
-						<select id="cfg-tlsFragment">
-							<option value="">None / Disabled</option>
-							<option value="Shadowrocket">Shadowrocket (1,40-60,30-50,tlshello)</option>
-							<option value="Happ">Happ (3,1,tlshello)</option>
-						</select>
-					</div>
-					<div class="form-group">
-						<label class="form-label">gRPC Mode</label>
-						<select id="cfg-grpcMode">
-							<option value="gun">gun</option>
-							<option value="multi">multi</option>
-						</select>
-					</div>
-				</div>
+      <div class="card">
+        <div class="card-head">
+          <div><div class="card-title">Primary Node Link</div><div class="card-desc">Generated from your active protocol settings</div></div>
+          <button class="btn btn-ghost btn-sm" onclick="openQr()">QR Code</button>
+        </div>
+        <div class="link-box">
+          <div class="link-text" id="nodeLink"><div class="skeleton" style="height:16px;width:100%"></div></div>
+          <button class="btn btn-accent btn-sm" onclick="copy(document.getElementById('nodeLink').textContent)">Copy</button>
+        </div>
+      </div>
 
-				<div class="form-grid" style="margin-top: 0.5rem;">
-					<div class="toggle-group">
-						<div class="toggle-info">
-							<div class="toggle-title">Skip Certificate Verification</div>
-							<div class="toggle-desc">Allow insecure TLS connections (skipCertVerify)</div>
-						</div>
-						<label class="switch">
-							<input type="checkbox" id="cfg-skipCertVerify">
-							<span class="slider"></span>
-						</label>
-					</div>
-					<div class="toggle-group">
-						<div class="toggle-info">
-							<div class="toggle-title">Enable 0-RTT Connection</div>
-							<div class="toggle-desc">Zero Round Trip Time early data acceleration</div>
-						</div>
-						<label class="switch">
-							<input type="checkbox" id="cfg-enable0RTT">
-							<span class="slider"></span>
-						</label>
-					</div>
-					<div class="toggle-group">
-						<div class="toggle-info">
-							<div class="toggle-title">Random Path Generation</div>
-							<div class="toggle-desc">Use randomized path prefixes for connection obfuscation</div>
-						</div>
-						<label class="switch">
-							<input type="checkbox" id="cfg-randomPath">
-							<span class="slider"></span>
-						</label>
-					</div>
-					<div class="toggle-group">
-						<div class="toggle-info">
-							<div class="toggle-title">Encrypted Client Hello (ECH)</div>
-							<div class="toggle-desc">Enable ECH SNI obfuscation with DoH</div>
-						</div>
-						<label class="switch">
-							<input type="checkbox" id="cfg-ech">
-							<span class="slider"></span>
-						</label>
-					</div>
-				</div>
-			</div>
+      <div class="card">
+        <div class="card-head">
+          <div><div class="card-title">Subscription URLs</div><div class="card-desc">Import into Clash, SingBox, Shadowrocket or V2Ray</div></div>
+        </div>
+        <div class="form-grid">
+          <div class="field"><label>Universal</label><div class="link-box"><div class="link-text" id="subAuto">-</div><button class="btn btn-ghost btn-sm" onclick="copy(document.getElementById('subAuto').textContent)">Copy</button></div></div>
+          <div class="field"><label>Clash / Meta</label><div class="link-box"><div class="link-text" id="subClash">-</div><button class="btn btn-ghost btn-sm" onclick="copy(document.getElementById('subClash').textContent)">Copy</button></div></div>
+          <div class="field"><label>Sing-Box</label><div class="link-box"><div class="link-text" id="subSingbox">-</div><button class="btn btn-ghost btn-sm" onclick="copy(document.getElementById('subSingbox').textContent)">Copy</button></div></div>
+          <div class="field"><label>Base64</label><div class="link-box"><div class="link-text" id="subB64">-</div><button class="btn btn-ghost btn-sm" onclick="copy(document.getElementById('subB64').textContent)">Copy</button></div></div>
+        </div>
+      </div>
+    </div>
 
-			<div class="card">
-				<div class="card-header">
-					<div>
-						<div class="card-title">🔒 Shadowsocks (SS) Settings</div>
-						<div class="card-desc">Configure Shadowsocks AEAD cipher and TLS transport for SS protocol</div>
-					</div>
-				</div>
-				<div class="form-grid">
-					<div class="form-group">
-						<label class="form-label">AEAD Cipher Method</label>
-						<select id="cfg-ssCipher">
-							<option value="aes-128-gcm">aes-128-gcm</option>
-							<option value="aes-256-gcm">aes-256-gcm</option>
-						</select>
-					</div>
-					<div class="toggle-group">
-						<div class="toggle-info">
-							<div class="toggle-title">Use TLS for SS</div>
-							<div class="toggle-desc">Send SS over TLS (wss://) instead of plain ws://</div>
-						</div>
-						<label class="switch">
-							<input type="checkbox" id="cfg-ssTls">
-							<span class="slider"></span>
-						</label>
-					</div>
-				</div>
-			</div>
-		</div>
+    <!-- ═══ Node & Subscriptions ═══ -->
+    <div class="panel" id="panel-links">
+      <div class="card">
+        <div class="card-head"><div><div class="card-title">Connection Link</div><div class="card-desc">Copy this link into your client app</div></div></div>
+        <div class="link-box"><div class="link-text" id="nodeLink2">-</div><button class="btn btn-accent btn-sm" onclick="copy(document.getElementById('nodeLink2').textContent)">Copy</button></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div><div class="card-title">All Subscription URLs</div></div></div>
+        <div class="form-grid">
+          <div class="field"><label>Universal</label><div class="link-box"><div class="link-text" id="subAuto2">-</div><button class="btn btn-ghost btn-sm" onclick="copy(document.getElementById('subAuto2').textContent)">Copy</button></div></div>
+          <div class="field"><label>Clash / Meta</label><div class="link-box"><div class="link-text" id="subClash2">-</div><button class="btn btn-ghost btn-sm" onclick="copy(document.getElementById('subClash2').textContent)">Copy</button></div></div>
+          <div class="field"><label>Sing-Box</label><div class="link-box"><div class="link-text" id="subSingbox2">-</div><button class="btn btn-ghost btn-sm" onclick="copy(document.getElementById('subSingbox2').textContent)">Copy</button></div></div>
+          <div class="field"><label>Base64</label><div class="link-box"><div class="link-text" id="subB642">-</div><button class="btn btn-ghost btn-sm" onclick="copy(document.getElementById('subB642').textContent)">Copy</button></div></div>
+        </div>
+      </div>
+    </div>
 
-		<!-- Tab 3: Optimal Subscriptions -->
-		<div id="tab-generator" class="tab-panel">
-			<div class="card">
-				<div class="card-header">
-					<div>
-						<div class="card-title">⚡ Optimal Subscription Generator Settings</div>
-						<div class="card-desc">Configure automated optimal IP pools and subscription auto-updating</div>
-					</div>
-				</div>
-				<div class="form-grid">
-					<div class="form-group">
-						<label class="form-label">Subscription Name (SUBNAME)</label>
-						<input type="text" class="form-control" id="cfg-subname" placeholder="edgetunnel">
-					</div>
-					<div class="form-group">
-						<label class="form-label">Specified Port (-1 for all)</label>
-						<input type="number" class="form-control" id="cfg-specifiedPort" value="-1">
-					</div>
-				</div>
-			</div>
+    <!-- ═══ Protocol & Network ═══ -->
+    <div class="panel" id="panel-protocol">
+      <div class="card">
+        <div class="card-head"><div><div class="card-title">Core Protocol</div><div class="card-desc">Tunneling protocol, transport layer, and TLS parameters</div></div></div>
+        <div class="form-grid">
+          <div class="field"><label>Protocol Type (Subscription)</label><select id="cfg-protocolType"><option value="all">All Protocols</option><option value="vless">VLESS</option><option value="vmess">VMess</option><option value="trojan">Trojan</option><option value="ss">Shadowsocks</option></select><p class="field-hint">Controls which protocol links appear in subscription output. All protocols are always accepted at the transport level.</p></div>
+          <div class="field"><label>Transport</label><select id="cfg-transportProtocol"><option value="ws">WebSocket</option><option value="grpc">gRPC</option><option value="xhttp">XHTTP</option></select></div>
+          <div class="field"><label>Node Path</label><input type="text" id="cfg-path" placeholder="/"></div>
+          <div class="field"><label>Fingerprint</label><select id="cfg-fingerprint"><option value="chrome">Chrome</option><option value="firefox">Firefox</option><option value="safari">Safari</option><option value="ios">iOS</option><option value="randomized">Randomized</option></select></div>
+          <div class="field"><label>TLS Fragment</label><select id="cfg-tlsFragment"><option value="">Disabled</option><option value="Shadowrocket">Shadowrocket</option><option value="Happ">Happ</option></select></div>
+          <div class="field"><label>gRPC Mode</label><select id="cfg-grpcMode"><option value="gun">gun</option><option value="multi">multi</option></select></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:.5rem;margin-top:.75rem">
+          <div class="toggle-row"><div class="toggle-info"><div class="t-title">Skip Certificate Verify</div><div class="t-desc">Allow insecure TLS connections</div></div><label class="switch"><input type="checkbox" id="cfg-skipCertVerify"><span class="slider"></span></label></div>
+          <div class="toggle-row"><div class="toggle-info"><div class="t-title">0-RTT Early Data</div><div class="t-desc">Zero Round Trip Time acceleration</div></div><label class="switch"><input type="checkbox" id="cfg-enable0RTT"><span class="slider"></span></label></div>
+          <div class="toggle-row"><div class="toggle-info"><div class="t-title">Random Path</div><div class="t-desc">Randomized path prefixes for obfuscation</div></div><label class="switch"><input type="checkbox" id="cfg-randomPath"><span class="slider"></span></label></div>
+          <div class="toggle-row"><div class="toggle-info"><div class="t-title">ECH (Encrypted Client Hello)</div><div class="t-desc">SNI obfuscation via DoH</div></div><label class="switch"><input type="checkbox" id="cfg-ech" onchange="toggleECH()"><span class="slider"></span></label></div>
+        </div>
+        <div id="echConfig" style="display:none;margin-top:.75rem">
+          <div class="form-grid">
+            <div class="field"><label>ECH DoH DNS</label><input type="text" id="cfg-echDns" placeholder="https://dns.alidns.com/dns-query"></div>
+            <div class="field"><label>ECH SNI</label><input type="text" id="cfg-echSni" placeholder="cloudflare-ech.com"></div>
+          </div>
+        </div>
+      </div>
 
-			<div class="card">
-				<div class="card-header">
-					<div>
-						<div class="card-title">📝 Custom Optimal IP List (ADD.txt)</div>
-						<div class="card-desc">Enter custom IP:PORT or domain nodes to inject into your subscription</div>
-					</div>
-					<button class="btn btn-secondary btn-sm" onclick="saveAddTxt()">Save ADD.txt</button>
-				</div>
-				<textarea id="cfg-addTxt" placeholder="Example:&#10;104.16.1.1:443#Optimal_CF_1&#10;104.16.2.1:443#Optimal_CF_2"></textarea>
-			</div>
-		</div>
+      <div class="card">
+        <div class="card-head"><div><div class="card-title">Shadowsocks Settings</div><div class="card-desc">AEAD cipher and TLS transport for SS protocol</div></div></div>
+        <div class="form-grid">
+          <div class="field"><label>Cipher Method</label><select id="cfg-ssCipher"><option value="aes-128-gcm">aes-128-gcm</option><option value="aes-256-gcm">aes-256-gcm</option></select></div>
+          <div class="toggle-row"><div class="toggle-info"><div class="t-title">Use TLS for SS</div><div class="t-desc">Send SS over wss:// instead of ws://</div></div><label class="switch"><input type="checkbox" id="cfg-ssTls"><span class="slider"></span></label></div>
+        </div>
+      </div>
+    </div>
 
-				<!-- Tab 6: Cloudflare API -->
-		<div id="tab-cloudflare" class="tab-panel">
-			<div class="card">
-				<div class="card-header">
-					<div>
-						<div class="card-title">☁️ Cloudflare Credentials & Daily Request Quota</div>
-						<div class="card-desc">Connect your Cloudflare account to monitor Workers & Pages daily quota</div>
-					</div>
-				</div>
-				<div class="form-grid">
-					<div class="form-group">
-						<label class="form-label">Account Email</label>
-						<input type="email" class="form-control" id="cfg-cfEmail" placeholder="user@example.com">
-					</div>
-					<div class="form-group">
-						<label class="form-label">Global API Key</label>
-						<input type="password" class="form-control" id="cfg-cfApiKey" placeholder="Cloudflare Global API Key">
-					</div>
-					<div class="form-group">
-						<label class="form-label">Account ID</label>
-						<input type="text" class="form-control" id="cfg-cfAccountId" placeholder="Account ID hex">
-					</div>
-					<div class="form-group">
-						<label class="form-label">API Token (Optional)</label>
-						<input type="password" class="form-control" id="cfg-cfApiToken" placeholder="Cloudflare API Token">
-					</div>
-				</div>
-				<div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
-					<button class="btn btn-secondary" onclick="saveCfSettings()">Save Cloudflare Credentials</button>
-				</div>
-			</div>
+    <!-- ═══ Optimal Subscriptions ═══ -->
+    <div class="panel" id="panel-subscriptions">
+      <div class="card">
+        <div class="card-head"><div><div class="card-title">Subscription Generator</div><div class="card-desc">Configure optimal IP pools and auto-update</div></div></div>
+        <div class="form-grid">
+          <div class="field"><label>Subscription Name</label><input type="text" id="cfg-subname" placeholder="edgetunnel"></div>
+          <div class="field"><label>Specified Port (-1 = all)</label><input type="number" id="cfg-specifiedPort" value="-1"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div><div class="card-title">Custom IP List (ADD.txt)</div><div class="card-desc">IP:PORT or domain nodes to inject</div></div><button class="btn btn-ghost btn-sm" onclick="saveAddTxt()">Save ADD.txt</button></div>
+        <textarea id="cfg-addTxt" placeholder="104.16.1.1:443#CF_1&#10;104.16.2.1:443#CF_2"></textarea>
+      </div>
+    </div>
 
-			<div class="card" style="border-color: rgba(239, 68, 68, 0.3);">
-				<div class="card-header">
-					<div>
-						<div class="card-title" style="color: var(--danger);">⚠️ Factory Reset</div>
-						<div class="card-desc">Restore all EdgeTunnel settings back to initial defaults</div>
-					</div>
-					<button class="btn btn-danger btn-sm" onclick="resetConfigDefaults()">Reset All to Defaults</button>
-				</div>
-			</div>
-		</div>
-	</main>
+    <!-- ═══ Cloudflare API ═══ -->
+    <div class="panel" id="panel-cloudflare">
+      <div class="card">
+        <div class="card-head"><div><div class="card-title">Cloudflare Credentials</div><div class="card-desc">Monitor Workers & Pages daily quota</div></div></div>
+        <div class="form-grid">
+          <div class="field"><label>Account Email</label><input type="email" id="cfg-cfEmail" placeholder="user@example.com"></div>
+          <div class="field"><label>Global API Key</label><input type="password" id="cfg-cfApiKey" placeholder="API Key"></div>
+          <div class="field"><label>Account ID</label><input type="text" id="cfg-cfAccountId" placeholder="Account ID"></div>
+          <div class="field"><label>API Token (optional)</label><input type="password" id="cfg-cfApiToken" placeholder="API Token"></div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:.5rem"><button class="btn btn-ghost" onclick="saveCfSettings()">Save Cloudflare</button></div>
+      </div>
 
-	<!-- QR Modal -->
-	<div id="qr-modal" class="modal-overlay" onclick="if(event.target === this) closeQrModal()">
-		<div class="modal-content">
-			<div class="modal-header">
-				<span>📱 Node QR Code</span>
-				<button class="modal-close" onclick="closeQrModal()">&times;</button>
-			</div>
-			<div class="qr-wrapper">
-				<img id="qr-image" src="" alt="QR Code" style="max-width: 250px; width: 100%; height: auto;">
-			</div>
-			<button class="btn btn-secondary" onclick="closeQrModal()">Close</button>
-		</div>
-	</div>
+      <div class="card danger-zone">
+        <div class="card-head"><div><div class="card-title">Factory Reset</div><div class="card-desc">Restore all settings to defaults</div></div><button class="btn btn-danger btn-sm" onclick="resetDefaults()">Reset All</button></div>
+      </div>
+    </div>
 
-	<!-- Toast Message -->
-	<div id="toast">Message</div>
+  </div><!-- /content -->
+</div><!-- /main -->
+</div><!-- /layout -->
 
-	<script>
-		let currentConfig = {};
+<!-- QR Modal -->
+<div class="modal-bg" id="qrModal" onclick="if(event.target===this)closeQr()">
+  <div class="modal">
+    <div class="modal-head"><span>Node QR Code</span><button class="modal-x" onclick="closeQr()">&times;</button></div>
+    <div class="modal-qr"><img id="qrImg" src="" alt="QR"></div>
+    <button class="btn btn-ghost" onclick="closeQr()" style="width:100%">Close</button>
+  </div>
+</div>
 
-		// Switch Tab
-		function switchTab(tabId, btn) {
-			document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-			document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-			const target = document.getElementById('tab-' + tabId);
-			if (target) target.classList.add('active');
-			if (btn) btn.classList.add('active');
-		}
+<!-- Toast -->
+<div id="toast">-</div>
 
-		// Toast Notification
-		function showToast(msg, type = 'success') {
-			const toast = document.getElementById('toast');
-			toast.textContent = msg;
-			toast.className = 'show ' + type;
-			setTimeout(() => { toast.className = ''; }, 3500);
-		}
+<script>
+let C={};
 
-		// Copy text
-		function copyText(text) {
-			if (!text || text === '-' || text.includes('Loading')) return;
-			navigator.clipboard.writeText(text).then(() => {
-				showToast('Copied to clipboard! 📋', 'success');
-			}).catch(() => {
-				showToast('Failed to copy', 'error');
-			});
-		}
+function showPanel(id,el){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  if(el)el.classList.add('active');
+  document.getElementById('topbarTitle').textContent=el?el.textContent.trim():id;
+  // sync links panel
+  if(id==='links'){syncLinks()}
+  // close sidebar on mobile
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
+}
 
-		// QR Modal
-		function openQrModal(type) {
-			const link = document.getElementById('primary-node-link').textContent;
-			if (!link || link.includes('Loading')) return;
-			const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(link);
-			document.getElementById('qr-image').src = qrUrl;
-			document.getElementById('qr-modal').classList.add('open');
-		}
+function syncLinks(){
+  const link=C.LINK||'-';
+  const t=C.optSubGenerator?.TOKEN||'';
+  const o=window.location.origin;
+  document.getElementById('nodeLink2').textContent=link;
+  document.getElementById('subAuto2').textContent=o+'/sub?token='+t;
+  document.getElementById('subClash2').textContent=o+'/sub?token='+t+'&clash=1';
+  document.getElementById('subSingbox2').textContent=o+'/sub?token='+t+'&singbox=1';
+  document.getElementById('subB642').textContent=o+'/sub?token='+t+'&b64=1';
+}
 
-		function closeQrModal() {
-			document.getElementById('qr-modal').classList.remove('open');
-		}
+function toggleSidebar(){
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('open');
+}
 
-		// Load All Data
-		async function loadAllData() {
-			try {
-				const res = await fetch('/admin/config.json');
-				if (!res.ok) throw new Error('Failed to fetch config');
-				currentConfig = await res.json();
-				populateForm(currentConfig);
-				loadAddTxt();
-				showToast('Configuration loaded successfully', 'info');
-			} catch (err) {
-				console.error(err);
-				showToast('Error loading configuration: ' + err.message, 'error');
-			}
-		}
+function showToast(m,t='ok'){
+  const el=document.getElementById('toast');
+  el.textContent=m;el.className='show '+t;
+  setTimeout(()=>{el.className=''},3500);
+}
 
-		// Populate UI with Config
-		function populateForm(cfg) {
-			const host = cfg.HOST || window.location.hostname;
-			document.getElementById('header-host').textContent = host;
-			const proto = cfg.protocolType || 'all';
-			document.getElementById('stat-load-time').textContent = cfg.loadTime || '0ms';
+function copy(t){
+  if(!t||t==='-'||t.includes('Loading'))return;
+  navigator.clipboard.writeText(t).then(()=>showToast('Copied!')).catch(()=>showToast('Copy failed','err'));
+}
 
-			if (cfg.CF?.Usage) {
-				const u = cfg.CF.Usage;
-				document.getElementById('stat-cf-usage').innerHTML = 
-					'<span style="color: var(--success);">' + (u.total || 0).toLocaleString() + '</span> / ' + (u.max || 100000).toLocaleString();
-			}
+function openQr(){
+  const link=document.getElementById('nodeLink').textContent;
+  if(!link||link.includes('Loading'))return;
+  document.getElementById('qrImg').src='https://api.qrserver.com/v1/create-qr-code/?size=280x280&data='+encodeURIComponent(link);
+  document.getElementById('qrModal').classList.add('open');
+}
+function closeQr(){document.getElementById('qrModal').classList.remove('open')}
+function toggleECH(){const e=document.getElementById('cfg-ech').checked;document.getElementById('echConfig').style.display=e?'':'none'}
 
-			// Node Links
-			const nodeLink = cfg.LINK || 'No link generated';
-			document.getElementById('primary-node-link').textContent = nodeLink;
+async function loadAllData(){
+  try{
+    const r=await fetch('/admin/config.json');
+    if(!r.ok)throw new Error('Fetch failed');
+    C=await r.json();
+    fillForm(C);loadAddTxt();
+    showToast('Config loaded','info');
+  }catch(e){showToast('Load error: '+e.message,'err')}
+}
 
-			const token = cfg.optSubGenerator?.TOKEN || '';
-			const origin = window.location.origin;
-			document.getElementById('sub-auto').textContent = origin + '/sub?token=' + token;
-			document.getElementById('sub-clash').textContent = origin + '/sub?token=' + token + '&clash=1';
-			document.getElementById('sub-singbox').textContent = origin + '/sub?token=' + token + '&singbox=1';
-			document.getElementById('sub-b64').textContent = origin + '/sub?token=' + token + '&b64=1';
+function fillForm(c){
+  const host=c.HOST||window.location.hostname;
+  document.getElementById('sidebarHost').textContent=host;
+  document.getElementById('topbarHost').textContent=host;
+  document.getElementById('s-time').innerHTML='<code>'+(c.loadTime||'-')+'</code>';
 
-			// Tab 2: Network
-			document.getElementById('cfg-protocolType').value = cfg.protocolType || 'all';
-			document.getElementById('cfg-transportProtocol').value = cfg.transportProtocol || 'ws';
-			document.getElementById('cfg-fingerprint').value = cfg.Fingerprint || 'chrome';
-			document.getElementById('cfg-tlsFragment').value = cfg.TLSFragment || '';
-			document.getElementById('cfg-grpcMode').value = cfg.gRPCmode || 'gun';
-			document.getElementById('cfg-skipCertVerify').checked = !!cfg.skipCertVerify;
-			document.getElementById('cfg-enable0RTT').checked = !!cfg.enable0RTT;
-			document.getElementById('cfg-randomPath').checked = !!cfg.randomPath;
-			document.getElementById('cfg-ech').checked = !!cfg.ECH;
+  // stats
+  const p=c.protocolType||'all';
+  const tp=c.transportProtocol||'ws';
+  document.getElementById('s-proto').innerHTML='<code>'+p.toUpperCase()+'</code>';
+  document.getElementById('s-transport').innerHTML='<code>'+(tp==='grpc'?'gRPC':tp.toUpperCase())+'</code>';
 
-			// Shadowsocks (SS) settings
-			const ssCfg = cfg.SS || {};
-			document.getElementById('cfg-ssCipher').value = ssCfg.cipherMethod || 'aes-128-gcm';
-			document.getElementById('cfg-ssTls').checked = !!ssCfg.TLS;
+  if(c.CF?.Usage){
+    const u=c.CF.Usage;
+    document.getElementById('s-cf').innerHTML='<span class="ok">'+(u.total||0).toLocaleString()+'</span> / '+(u.max||100000).toLocaleString();
+  }
 
-			// Tab 3: Optimal Sub Generator
-			const opt = cfg.optSubGenerator || {};
-			document.getElementById('cfg-subname').value = opt.SUBNAME || 'edgetunnel';
-			document.getElementById('cfg-specifiedPort').value = opt.localIPDB?.specifiedPort ?? -1;
+  // links
+  const link=c.LINK||'No link generated';
+  document.getElementById('nodeLink').textContent=link;
+  const t=c.optSubGenerator?.TOKEN||'';
+  const o=window.location.origin;
+  document.getElementById('subAuto').textContent=o+'/sub?token='+t;
+  document.getElementById('subClash').textContent=o+'/sub?token='+t+'&clash=1';
+  document.getElementById('subSingbox').textContent=o+'/sub?token='+t+'&singbox=1';
+  document.getElementById('subB64').textContent=o+'/sub?token='+t+'&b64=1';
 
-			// Tab 6: Cloudflare
-			document.getElementById('cfg-cfEmail').value = cfg.CF?.Email || '';
-			document.getElementById('cfg-cfApiKey').value = cfg.CF?.GlobalAPIKey || '';
-			document.getElementById('cfg-cfAccountId').value = cfg.CF?.AccountID || '';
-			document.getElementById('cfg-cfApiToken').value = cfg.CF?.APIToken || '';
-		}
+  // protocol
+  document.getElementById('cfg-protocolType').value=c.protocolType||'all';
+  document.getElementById('cfg-transportProtocol').value=c.transportProtocol||'ws';
+  document.getElementById('cfg-path').value=c.PATH||'/';
+  document.getElementById('cfg-fingerprint').value=c.Fingerprint||'chrome';
+  document.getElementById('cfg-tlsFragment').value=c.TLSFragment||'';
+  document.getElementById('cfg-grpcMode').value=c.gRPCmode||'gun';
+  document.getElementById('cfg-skipCertVerify').checked=!!c.skipCertVerify;
+  document.getElementById('cfg-enable0RTT').checked=!!c.enable0RTT;
+  document.getElementById('cfg-randomPath').checked=!!c.randomPath;
+  document.getElementById('cfg-ech').checked=!!c.ECH;
+  const echCfg=c.ECHConfig||{};
+  document.getElementById('cfg-echDns').value=echCfg.DNS||'https://dns.alidns.com/dns-query';
+  document.getElementById('cfg-echSni').value=echCfg.SNI||'cloudflare-ech.com';
+  toggleECH();
 
-		// Save Configuration
-		async function saveConfiguration() {
-			try {
-				currentConfig.protocolType = document.getElementById('cfg-protocolType').value;
-				currentConfig.transportProtocol = document.getElementById('cfg-transportProtocol').value;
-				currentConfig.PATH = document.getElementById('cfg-path').value || '/';
-				currentConfig.Fingerprint = document.getElementById('cfg-fingerprint').value;
-				currentConfig.TLSFragment = document.getElementById('cfg-tlsFragment').value || null;
-				currentConfig.gRPCmode = document.getElementById('cfg-grpcMode').value;
-				currentConfig.skipCertVerify = document.getElementById('cfg-skipCertVerify').checked;
-				currentConfig.enable0RTT = document.getElementById('cfg-enable0RTT').checked;
-				currentConfig.randomPath = document.getElementById('cfg-randomPath').checked;
-				currentConfig.ECH = document.getElementById('cfg-ech').checked;
-				currentConfig.SS = {
-					cipherMethod: document.getElementById('cfg-ssCipher').value,
-					TLS: document.getElementById('cfg-ssTls').checked
-				};
+  // ss
+  const ss=c.SS||{};
+  document.getElementById('cfg-ssCipher').value=ss.cipherMethod||'aes-128-gcm';
+  document.getElementById('cfg-ssTls').checked=!!ss.TLS;
 
-				currentConfig.optSubGenerator = currentConfig.optSubGenerator || {};
-				currentConfig.optSubGenerator.SUBNAME = document.getElementById('cfg-subname').value || 'edgetunnel';
-				currentConfig.optSubGenerator.localIPDB = currentConfig.optSubGenerator.localIPDB || {};
-				currentConfig.optSubGenerator.localIPDB.specifiedPort = parseInt(document.getElementById('cfg-specifiedPort').value, 10);
+  // subscriptions
+  const opt=c.optSubGenerator||{};
+  document.getElementById('cfg-subname').value=opt.SUBNAME||'edgetunnel';
+  document.getElementById('cfg-specifiedPort').value=opt.localIPDB?.specifiedPort??-1;
 
-				const res = await fetch('/admin/config.json', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(currentConfig)
-				});
+  // cf
+  document.getElementById('cfg-cfEmail').value=c.CF?.Email||'';
+  document.getElementById('cfg-cfApiKey').value=c.CF?.GlobalAPIKey||'';
+  document.getElementById('cfg-cfAccountId').value=c.CF?.AccountID||'';
+  document.getElementById('cfg-cfApiToken').value=c.CF?.APIToken||'';
+}
 
-				if (!res.ok) throw new Error('Save request failed: ' + res.status);
-				showToast('Configuration saved successfully! 💾', 'success');
-				loadAllData();
-			} catch (err) {
-				console.error(err);
-				showToast('Failed to save config: ' + err.message, 'error');
-			}
-		}
+async function saveAll(){
+  try{
+    C.protocolType=document.getElementById('cfg-protocolType').value;
+    C.transportProtocol=document.getElementById('cfg-transportProtocol').value;
+    C.PATH=document.getElementById('cfg-path').value||'/';
+    C.Fingerprint=document.getElementById('cfg-fingerprint').value;
+    C.TLSFragment=document.getElementById('cfg-tlsFragment').value||null;
+    C.gRPCmode=document.getElementById('cfg-grpcMode').value;
+    C.skipCertVerify=document.getElementById('cfg-skipCertVerify').checked;
+    C.enable0RTT=document.getElementById('cfg-enable0RTT').checked;
+    C.randomPath=document.getElementById('cfg-randomPath').checked;
+    C.ECH=document.getElementById('cfg-ech').checked;
+    C.ECHConfig={DNS:document.getElementById('cfg-echDns').value||'https://dns.alidns.com/dns-query',SNI:document.getElementById('cfg-echSni').value||'cloudflare-ech.com'};
+    C.SS={cipherMethod:document.getElementById('cfg-ssCipher').value,TLS:document.getElementById('cfg-ssTls').checked};
+    C.optSubGenerator=C.optSubGenerator||{};
+    C.optSubGenerator.SUBNAME=document.getElementById('cfg-subname').value||'edgetunnel';
+    C.optSubGenerator.localIPDB=C.optSubGenerator.localIPDB||{};
+    C.optSubGenerator.localIPDB.specifiedPort=parseInt(document.getElementById('cfg-specifiedPort').value,10);
 
-		// Load ADD.txt
-		async function loadAddTxt() {
-			try {
-				const res = await fetch('/admin/ADD.txt');
-				if (res.ok) {
-					const text = await res.text();
-					document.getElementById('cfg-addTxt').value = text === 'null' ? '' : text;
-				}
-			} catch (e) {
-				console.error('loadAddTxt error:', e);
-			}
-		}
+    const r=await fetch('/admin/config.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(C)});
+    if(!r.ok)throw new Error(r.status);
+    showToast('Saved!');
+    loadAllData();
+  }catch(e){showToast('Save failed: '+e.message,'err')}
+}
 
-		// Save ADD.txt
-		async function saveAddTxt() {
-			try {
-				const val = document.getElementById('cfg-addTxt').value;
-				const res = await fetch('/admin/ADD.txt', {
-					method: 'POST',
-					headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-					body: val
-				});
-				if (res.ok) showToast('ADD.txt saved successfully! 📝', 'success');
-				else showToast('Failed to save ADD.txt', 'error');
-			} catch (e) {
-				showToast('Error saving ADD.txt: ' + e.message, 'error');
-			}
-		}
+async function loadAddTxt(){
+  try{const r=await fetch('/admin/ADD.txt');if(r.ok){const t=await r.text();document.getElementById('cfg-addTxt').value=t==='null'?'':t}}catch(e){}
+}
 
-		// Save Cloudflare Settings
-		async function saveCfSettings() {
-			try {
-				const data = {
-					Email: document.getElementById('cfg-cfEmail').value,
-					GlobalAPIKey: document.getElementById('cfg-cfApiKey').value,
-					AccountID: document.getElementById('cfg-cfAccountId').value,
-					APIToken: document.getElementById('cfg-cfApiToken').value
-				};
-				const res = await fetch('/admin/cf.json', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(data)
-				});
-				if (res.ok) showToast('Cloudflare settings saved! ☁️', 'success');
-				else showToast('Failed to save Cloudflare settings', 'error');
-			} catch (e) {
-				showToast('Error: ' + e.message, 'error');
-			}
-		}
+async function saveAddTxt(){
+  try{const r=await fetch('/admin/ADD.txt',{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:document.getElementById('cfg-addTxt').value});
+  r.ok?showToast('ADD.txt saved!'):showToast('Save failed','err')}catch(e){showToast(e.message,'err')}
+}
 
-		// Reset Config Defaults
-		async function resetConfigDefaults() {
-			if (!confirm('WARNING: This will reset all EdgeTunnel settings back to default values. Continue?')) return;
-			try {
-				const res = await fetch('/admin/init');
-				if (res.ok) {
-					showToast('Configuration restored to factory defaults! ⚡', 'success');
-					loadAllData();
-				} else {
-					showToast('Reset failed', 'error');
-				}
-			} catch (err) {
-				showToast('Reset error: ' + err.message, 'error');
-			}
-		}
+async function saveCfSettings(){
+  try{const r=await fetch('/admin/cf.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    Email:document.getElementById('cfg-cfEmail').value,GlobalAPIKey:document.getElementById('cfg-cfApiKey').value,
+    AccountID:document.getElementById('cfg-cfAccountId').value,APIToken:document.getElementById('cfg-cfApiToken').value})});
+  r.ok?showToast('Cloudflare saved!'):showToast('Save failed','err')}catch(e){showToast(e.message,'err')}
+}
 
-		// Initial load
-		document.addEventListener('DOMContentLoaded', loadAllData);
-	</script>
+async function resetDefaults(){
+  if(!confirm('Reset ALL settings to defaults?'))return;
+  try{const r=await fetch('/admin/init');if(r.ok){showToast('Reset done!');loadAllData()}else showToast('Reset failed','err')}catch(e){showToast(e.message,'err')}
+}
+
+document.addEventListener('DOMContentLoaded',loadAllData);
+</script>
 </body>
 </html>`;
 }
